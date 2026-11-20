@@ -1,0 +1,16 @@
+.git
+.github
+.gitignore
+.dockerignore
+.claude
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.coverage
+htmlcov
+.venv
+node_modules
+*.env
+**/*.env
+deploy/.env
+.DS_Store

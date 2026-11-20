@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+# Réglages locaux (mots de passe, jetons) : jamais dans le dépôt
+.env
+*.env
+!deploy/*.env.example
+deploy/.env
+.venv/
+.DS_Store
+
+# Site GitHub Pages généré par tools/build_site.py
+_site/

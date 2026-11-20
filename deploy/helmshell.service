@@ -1,0 +1,19 @@
+[Unit]
+Description=Helmshell — console web projets & sessions Claude
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/helmshell
+ExecStart=/usr/bin/python3 %h/helmshell/server.py
+EnvironmentFile=-%h/.config/helmshell/helmshell.env
+EnvironmentFile=-%h/.config/helmshell/helmshell.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Restart=on-failure
+RestartSec=3
+# Ne tue que le serveur web à l'arrêt : le serveur tmux (et donc les sessions Claude) continue.
+KillMode=process
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,18 @@
+Provenance des logos
+
+- tech/ : Devicon 2.16.0 (https://devicon.dev, licence MIT), sauf avalonia.svg (Avalonia UI) et
+  android, docker, golang, html5, java, node-js, python, rust, typescript (selfh.st icons, https://selfh.st/icons/).
+- Services de notification (gotify, ntfy, discord) : selfh.st icons.
+- selfh.st icons (https://selfh.st/icons/, https://github.com/selfhst/icons), © selfh.st, sous licence
+  Creative Commons Attribution 4.0 International (https://creativecommons.org/licenses/by/4.0/), fournies sans
+  garantie. Dessin non modifié ; seule l'écriture du fichier SVG peut différer de la version actuelle.
+- platform/ (python3 tools/fetch_platform_logos.py) :
+  - android, apple, discord, linux, telegram : Simple Icons 16.38.0 (https://simpleicons.org, CC0 1.0),
+    couleurs officielles des marques. Le robot Android est reproduit ou modifié à partir d'une œuvre créée et
+    partagée par Google, utilisée selon les termes de la licence Creative Commons Attribution 3.0.
+    Tux (Linux) d'après Larry Ewing <lewing@isc.tamu.edu>, créé avec The GIMP ;
+  - windows : Devicon 2.18.0 (https://devicon.dev, licence MIT) ;
+  - web : dessin original de Helmshell (licence du projet).
+- codex.svg : logo OpenAI de Simple Icons 15.22.0 (https://simpleicons.org, CC0 1.0 ; dernière version qui le
+  contient), attribut fill="#000000" ajouté. OpenAI et Codex sont des marques d'OpenAI.
+Les marques restent la propriété de leurs détenteurs ; les logos servent uniquement à les identifier.

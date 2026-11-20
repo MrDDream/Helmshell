@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helmshell · Drive your Linux server from any browser</title>
+<meta name="description" content="Helmshell is a self-hosted web console to drive your Linux server from a browser or a phone: projects, Git, terminals, Claude Code and OpenAI Codex sessions in tmux, Coolify and Dokploy deployments.">
+<meta name="theme-color" content="#F6F9FC">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://mrddream.github.io/Helmshell/">
+<link rel="alternate" hreflang="en" href="https://mrddream.github.io/Helmshell/?lang=en">
+<link rel="alternate" hreflang="fr" href="https://mrddream.github.io/Helmshell/?lang=fr">
+<link rel="alternate" hreflang="x-default" href="https://mrddream.github.io/Helmshell/">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Helmshell">
+<meta property="og:title" content="Helmshell · Drive your Linux server from any browser">
+<meta property="og:description" content="Self-hosted web console: projects, Git, terminals, Claude Code and OpenAI Codex sessions in tmux, Coolify and Dokploy deployments. Open source, MIT.">
+<meta property="og:url" content="https://mrddream.github.io/Helmshell/">
+<meta property="og:image" content="https://mrddream.github.io/Helmshell/screens/home-dark.png">
+<meta property="og:image:width" content="1440">
+<meta property="og:image:height" content="900">
+<meta property="og:image:alt" content="Helmshell home screen, dark theme">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="fr_FR">
+<meta name="twitter:card" content="summary_large_image">
+<script>
+/* Language and theme before the first paint (no flash). Same logic as assets/site.js. */
+(function () {
+  var d = document.documentElement, q = new URLSearchParams(location.search), get = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  var l = q.get('lang'); if (l !== 'en' && l !== 'fr') l = get('helmshell-site.lang');
+  if (l !== 'en' && l !== 'fr') l = /^fr\b/i.test((navigator.languages && navigator.languages[0]) || navigator.language || '') ? 'fr' : 'en';
+  d.lang = l;
+  var p = q.get('theme'); if (p !== 'auto' && p !== 'light' && p !== 'dark') p = get('helmshell-site.theme');
+  if (p !== 'light' && p !== 'dark') p = 'auto';
+  d.setAttribute('data-theme-pref', p);
+  d.setAttribute('data-theme', p === 'auto' ? (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : p);
+})();
+</script>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js" defer></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></symbol>
+  <symbol id="i-git" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="7" r="2.2"/><path d="M6 7.2v9.6"/><path d="M18 9.2c0 4.5-5.5 4-10.2 8"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.8 1.8H4.2z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M6 16v-4M10.5 16V6M15 16v-7M19.5 16v-9"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+  <symbol id="i-feather" viewBox="0 0 24 24"><path d="M13 2.5L4.5 14H11l-1 7.5L19.5 10H13z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.8-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.7-7.5-9.5V6z"/><path d="M8.8 12l2.2 2.2 4.3-4.4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3.6 3.2 14.4 0 18M12 3c-3.2 3.6-3.2 14.4 0 18"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="4"/><path d="M11 12.5l8.5-8.5M15.5 8l3 3"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M20.5 7.5L12 3 3.5 7.5v9L12 21l8.5-4.5z"/><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.8"/><path d="M2.5 20.5a7 7 0 0 1 14 0"/><path d="M16 11.5l2 2 4-4"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7L3.5 12l5 5M15.5 7l5 5-5 5"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.6A3.8 3.8 0 0 1 17.5 18.5z"/><path d="M12 11.5v5M9.6 13.8L12 11.4l2.4 2.4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6L6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14A8.5 8.5 0 1 1 10 3.5a6.8 6.8 0 0 0 10.5 10.5z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11.5" height="11.5" rx="2.2"/><path d="M5.5 15H5a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 5 3.5h8.5A1.5 1.5 0 0 1 15 5v.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M4.5 19.5h15"/></symbol>
+  <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+</svg>
+
+<a class="skip" href="#main"><span lang="en">Skip to content</span><span lang="fr">Aller au contenu</span></a>
+
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="#top" aria-label="Helmshell">
+      <img src="assets/logo.svg" alt="" width="32" height="32">
+      <span class="brand-name">Helmshell</span>
+    </a>
+    <nav class="nav" data-t-aria-label="Sections|Sections" aria-label="Sections">
+      <a href="#features"><span lang="en">Features</span><span lang="fr">Fonctions</span></a>
+      <a href="#agents"><span lang="en">Agents</span><span lang="fr">Agents</span></a>
+      <a href="#security"><span lang="en">Security</span><span lang="fr">Sécurité</span></a>
+      <a href="#install"><span lang="en">Install</span><span lang="fr">Installer</span></a>
+    </nav>
+    <div class="tools">
+      <div class="seg" role="group" data-t-aria-label="Language|Langue" aria-label="Language">
+        <button type="button" data-set-lang="en" aria-pressed="true" title="English">EN</button>
+        <button type="button" data-set-lang="fr" aria-pressed="false" title="Français">FR</button>
+      </div>
+      <div class="seg" role="group" data-t-aria-label="Theme|Thème" aria-label="Theme">
+        <button type="button" data-set-theme="auto" aria-pressed="true" data-t-title="Automatic theme (follows your system)|Thème automatique (suit ton système)" data-t-aria-label="Auto|Auto" aria-label="Auto"><svg class="i" aria-hidden="true"><use href="#i-auto"/></svg></button>
+        <button type="button" data-set-theme="light" aria-pressed="false" data-t-title="Light theme|Thème clair" data-t-aria-label="Light|Clair" aria-label="Light"><svg class="i" aria-hidden="true"><use href="#i-sun"/></svg></button>
+        <button type="button" data-set-theme="dark" aria-pressed="false" data-t-title="Dark theme|Thème sombre" data-t-aria-label="Dark|Sombre" aria-label="Dark"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg></button>
+      </div>
+      <a class="icon-btn" href="https://github.com/MrDDream/Helmshell" data-t-aria-label="Helmshell on GitHub|Helmshell sur GitHub" aria-label="Helmshell on GitHub" title="GitHub"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg></a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================================================================ hero -->
+<section class="hero" id="top">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="wrap hero-in">
+    <img class="hero-logo" src="assets/logo.svg" alt="" width="88" height="88">
+    <p class="eyebrow"><span lang="en">Self-hosted · Open source · MIT</span><span lang="fr">Auto-hébergé · Open source · MIT</span></p>
+    <h1>Helmshell</h1>
+    <p class="tagline">
+      <span lang="en">Drive your Linux server from any browser or phone.</span>
+      <span lang="fr">Pilote ton serveur Linux depuis n'importe quel navigateur ou téléphone.</span>
+    </p>
+    <p class="lede">
+      <span lang="en">Projects and files, Git, terminals, <strong>Claude Code</strong> and <strong>OpenAI Codex</strong> sessions in tmux, and deployments with <strong>Coolify</strong> or <strong>Dokploy</strong>, in one web console that installs as an app.</span>
+      <span lang="fr">Projets et fichiers, Git, terminaux, sessions <strong>Claude Code</strong> et <strong>OpenAI Codex</strong> dans tmux, et déploiements <strong>Coolify</strong> ou <strong>Dokploy</strong>, dans une seule console web qui s'installe comme une application.</span>
+    </p>
+    <div class="cta">
+      <a class="btn primary" data-demo href="demo/?lang=en&amp;theme=light"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span lang="en">Try the live demo</span><span lang="fr">Essayer la démo</span></a>
+      <a class="btn" href="https://github.com/MrDDream/Helmshell"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
+      <a class="btn" href="#install"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span lang="en">Install</span><span lang="fr">Installer</span></a>
+    </div>
+    <p class="hero-note">
+      <span lang="en">The demo is a static copy of the interface with sample data: click around, nothing to install.</span>
+      <span lang="fr">La démo est une copie statique de l'interface avec des données d'exemple : clique partout, rien à installer.</span>
+    </p>
+  </div>
+
+  <!-- showcase -->
+  <div class="wrap showcase" id="showcase">
+    <div class="tabs shot-tabs" role="tablist" data-t-aria-label="Screens|Écrans" aria-label="Screens">
+      <button type="button" role="tab" id="tab-home" aria-controls="shot-panel" aria-selected="true" data-view="home" data-alt="Helmshell home screen: items to handle, background tasks and recent projects|Écran d'accueil de Helmshell : éléments à traiter, tâches de fond et projets récents"><span lang="en">Home</span><span lang="fr">Accueil</span></button>
+      <button type="button" role="tab" id="tab-project" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-view="project" data-alt="A project in Helmshell: overview, files, Git, agent, deployment and settings tabs|Un projet dans Helmshell : onglets aperçu, fichiers, Git, agent, déploiement et réglages"><span lang="en">Project</span><span lang="fr">Projet</span></button>
+      <button type="button" role="tab" id="tab-agents" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-view="agents" data-alt="Agent sessions: Claude Code and Codex terminals of every project|Sessions des agents : terminaux Claude Code et Codex de tous les projets"><span lang="en">Agents</span><span lang="fr">Agents</span></button>
+      <button type="button" role="tab" id="tab-git" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-view="git" data-alt="Git tab: changes, partial commit, branches and history|Onglet Git : modifications, commit partiel, branches et historique"><span lang="en">Git</span><span lang="fr">Git</span></button>
+      <button type="button" role="tab" id="tab-deploy" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-view="deploy" data-alt="Deployments: Coolify or Dokploy applications with status, domains and logs|Déploiements : applications Coolify ou Dokploy avec état, domaines et logs"><span lang="en">Deployments</span><span lang="fr">Déploiements</span></button>
+      <button type="button" role="tab" id="tab-settings" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-view="settings" data-alt="Settings: agents, deployment, Git accounts, notifications, security and appearance|Paramètres : agents, déploiement, comptes Git, notifications, sécurité et apparence"><span lang="en">Settings</span><span lang="fr">Paramètres</span></button>
+    </div>
+
+    <div class="devices">
+      <figure class="browser" id="shot-panel" role="tabpanel" aria-labelledby="tab-home">
+        <div class="browser-bar" aria-hidden="true">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="url">my-server:8787</span>
+        </div>
+        <div class="screen">
+          <picture>
+            <source data-shot-dark srcset="screens/home-dark.png" media="(prefers-color-scheme: dark)">
+            <img data-shot="home" src="screens/home-light.png" width="1440" height="900" alt="Helmshell home screen: items to handle, background tasks and recent projects" fetchpriority="high">
+          </picture>
+        </div>
+        <figcaption class="caption">
+          <span data-caption="home"><span lang="en"><b>Home.</b> “To handle”: agent questions, stopped sessions, failed tasks and deployments, uncommitted files. Then background tasks and recent projects.</span><span lang="fr"><b>Accueil.</b> « À traiter » : questions des agents, sessions arrêtées, tâches et déploiements en échec, fichiers non validés. Puis les tâches de fond et les projets récents.</span></span>
+          <span data-caption="project" hidden><span lang="en"><b>Project.</b> Overview (rendered README, activity), Files (CodeMirror editor, search, Markdown, images, PDF), Git, Agent, Deployment and Settings.</span><span lang="fr"><b>Projet.</b> Aperçu (README rendu, activité), Fichiers (éditeur CodeMirror, recherche, Markdown, images, PDF), Git, Agent, Déploiement et Réglages.</span></span>
+          <span data-caption="agents" hidden><span lang="en"><b>Agent sessions.</b> The Claude Code and Codex terminals of every project, recent conversations, and resume where you left off.</span><span lang="fr"><b>Sessions des agents.</b> Les terminaux Claude Code et Codex de tous les projets, les conversations récentes, et la reprise là où tu t'étais arrêté.</span></span>
+          <span data-caption="git" hidden><span lang="en"><b>Git.</b> Partial commit, branches, parallel branches, history and diff, without leaving the browser.</span><span lang="fr"><b>Git.</b> Commit partiel, branches, branches en parallèle, historique et diff, sans quitter le navigateur.</span></span>
+          <span data-caption="deploy" hidden><span lang="en"><b>Deployments.</b> Coolify or Dokploy applications: status, domains, logs, history, deploy / restart / stop.</span><span lang="fr"><b>Déploiements.</b> Applications Coolify ou Dokploy : état, domaines, logs, historique, déployer / redémarrer / arrêter.</span></span>
+          <span data-caption="settings" hidden><span lang="en"><b>Settings.</b> Agents, Deployment, Git accounts, Notifications, Security (network access, OIDC, password, 2FA) and Appearance.</span><span lang="fr"><b>Paramètres.</b> Agents, Déploiement, comptes Git, Notifications, Sécurité (accès réseau, OIDC, mot de passe, 2FA) et Apparence.</span></span>
+        </figcaption>
+      </figure>
+
+      <figure class="phone-col">
+        <div class="phone">
+          <div class="phone-screen">
+            <picture>
+              <source data-shot-dark srcset="screens/mobile-home-dark.png" media="(prefers-color-scheme: dark)">
+              <img data-mshot="mobile-home" src="screens/mobile-home-light.png" width="390" height="844" alt="Helmshell home screen on a phone" data-t-alt="Helmshell home screen on a phone|Écran d'accueil de Helmshell sur un téléphone">
+            </picture>
+          </div>
+        </div>
+        <figcaption>
+          <div class="seg small" role="group" data-t-aria-label="Phone screen|Écran du téléphone" aria-label="Phone screen">
+            <button type="button" data-mview="mobile-home" aria-pressed="true" data-alt="Helmshell home screen on a phone|Écran d'accueil de Helmshell sur un téléphone"><span lang="en">Home</span><span lang="fr">Accueil</span></button>
+            <button type="button" data-mview="mobile-agents" aria-pressed="false" data-alt="An agent session on a phone|Une session d'agent sur un téléphone"><span lang="en">Agent</span><span lang="fr">Agent</span></button>
+          </div>
+          <span class="phone-note"><span lang="en">Same app on your phone, installable as a PWA.</span><span lang="fr">La même appli sur ton téléphone, installable en PWA.</span></span>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ features -->
+<section class="section" id="features" aria-labelledby="features-title">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="kicker"><span lang="en">Everything in one place</span><span lang="fr">Tout au même endroit</span></p>
+      <h2 id="features-title"><span lang="en">Your server, your projects, your agents</span><span lang="fr">Ton serveur, tes projets, tes agents</span></h2>
+      <p class="sub"><span lang="en">Every sub-folder of your projects folder is a project. Helmshell gives each one its files, its Git, its terminal and its agent.</span><span lang="fr">Chaque sous-dossier du dossier des projets est un projet. Helmshell donne à chacun ses fichiers, son Git, son terminal et son agent.</span></p>
+    </header>
+
+    <ul class="grid features" role="list">
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg></span>
+        <h3><span lang="en">Projects and files</span><span lang="fr">Projets et fichiers</span></h3>
+        <p><span lang="en">Cards with each project's logo, platforms and technologies, filters and search. A CodeMirror editor, Markdown, images and PDF.</span><span lang="fr">Cartes avec le logo, les plateformes et les technos de chaque projet, filtres et recherche. Éditeur CodeMirror, Markdown, images et PDF.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-git"/></svg></span>
+        <h3>Git</h3>
+        <p><span lang="en">Partial commit, branches, history and diff. Parallel branches: one <code>git worktree</code> per branch, each with its own agent session.</span><span lang="fr">Commit partiel, branches, historique et diff. Branches en parallèle : un <code>git worktree</code> par branche, chacun avec sa session d'agent.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></span>
+        <h3><span lang="en">Start a project</span><span lang="fr">Démarrer un projet</span></h3>
+        <p><span lang="en">Empty folder, Git clone or import from a linked GitHub, GitLab, Codeberg, Forgejo or Gitea account, templates (Node, Python, Android, static site).</span><span lang="fr">Dossier vide, clone Git ou import depuis un compte GitHub, GitLab, Codeberg, Forgejo ou Gitea, modèles (Node, Python, Android, site statique).</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-terminal"/></svg></span>
+        <h3><span lang="en">Persistent terminals</span><span lang="fr">Terminaux persistants</span></h3>
+        <p><span lang="en">tmux sessions for the server, each project and each agent. Close the tab, come back from your phone: the session is still there.</span><span lang="fr">Sessions tmux pour le serveur, chaque projet et chaque agent. Ferme l'onglet, reviens depuis ton téléphone : la session est toujours là.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></span>
+        <h3><span lang="en">Background tasks</span><span lang="fr">Tâches de fond</span></h3>
+        <p><span lang="en">“Delegate a task”: the agent runs non-interactively in tmux with your instructions. Read the result in Helmshell, get notified at the end.</span><span lang="fr">« Confier une tâche » : l'agent tourne en mode non interactif dans tmux avec ta consigne. Lis le résultat dans Helmshell, reçois une notification à la fin.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg></span>
+        <h3><span lang="en">Answer from a notification</span><span lang="fr">Répondre depuis une notification</span></h3>
+        <p><span lang="en">ntfy, Gotify or Discord. When an agent asks a question, the Yes / No buttons answer it: signed links, single use, valid for 10 minutes.</span><span lang="fr">ntfy, Gotify ou Discord. Quand un agent pose une question, les boutons Oui / Non y répondent : liens signés, à usage unique, valables 10 minutes.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg></span>
+        <h3><span lang="en">Server at a glance</span><span lang="fr">Le serveur d'un coup d'œil</span></h3>
+        <p><span lang="en">CPU, memory and disk from 1 hour to 30 days, the deployment tool's resources, and a trash kept for 30 days.</span><span lang="fr">Processeur, mémoire et disque sur 1 heure à 30 jours, ressources de l'outil de déploiement, et une corbeille gardée 30 jours.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-keyboard"/></svg></span>
+        <h3><span lang="en">Keyboard first, live</span><span lang="fr">Clavier d'abord, en direct</span></h3>
+        <p><span lang="en"><kbd>Ctrl</kbd> <kbd>K</kbd> command palette, <kbd>?</kbd> for shortcuts, <kbd>g</kbd> then a letter to switch pages. The tab shows “(1) Helmshell” when an agent is waiting.</span><span lang="fr">Palette <kbd>Ctrl</kbd> <kbd>K</kbd>, <kbd>?</kbd> pour les raccourcis, <kbd>g</kbd> puis une lettre pour changer de page. L'onglet affiche « (1) Helmshell » quand un agent attend.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-phone"/></svg></span>
+        <h3><span lang="en">An app, your way</span><span lang="fr">Une appli, à ton goût</span></h3>
+        <p><span lang="en">Installable as a PWA over HTTPS. Five styles (Material 3, Clean, Glass, Soft, High contrast), ten color palettes, light and dark, English or French.</span><span lang="fr">Installable en PWA en HTTPS. Cinq styles (Material 3, Épuré, Verre, Doux, Contrasté), dix palettes de couleurs, clair et sombre, français ou anglais.</span></p>
+      </li>
+    </ul>
+
+    <div class="light-band">
+      <svg class="i" aria-hidden="true"><use href="#i-feather"/></svg>
+      <p><span lang="en"><b>Nothing to install besides the basics:</b> Python 3 (standard library only), <code>tmux</code>, <code>git</code> and your AI agent. Browser libraries ship with the repository: no CDN, no build step.</span><span lang="fr"><b>Rien à installer de plus que l'essentiel :</b> Python 3 (bibliothèque standard seulement), <code>tmux</code>, <code>git</code> et ton agent IA. Les bibliothèques du navigateur sont livrées dans le dépôt : aucun CDN, aucune étape de build.</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== agents -->
+<section class="section alt" id="agents" aria-labelledby="agents-title">
+  <div class="wrap split">
+    <div>
+      <p class="kicker"><span lang="en">AI coding agents</span><span lang="fr">Agents IA de code</span></p>
+      <h2 id="agents-title"><span lang="en">Claude Code and Codex, side by side</span><span lang="fr">Claude Code et Codex, côte à côte</span></h2>
+      <p class="sub"><span lang="en">Install one or both: choose the agent per project and per task. Helmshell detects <code>claude</code> and <code>codex</code> on its own.</span><span lang="fr">Installe l'un ou les deux : tu choisis l'agent par projet et par tâche. Helmshell détecte <code>claude</code> et <code>codex</code> tout seul.</span></p>
+      <ul class="checks" role="list">
+        <li><span lang="en"><b>Agent tab of each project:</b> a terminal attached to the project's tmux session, with the agent running inside. Optionally resume the last conversation.</span><span lang="fr"><b>Onglet Agent de chaque projet :</b> un terminal attaché à la session tmux du projet, avec l'agent lancé dedans. Reprise de la dernière conversation au choix.</span></li>
+        <li><span lang="en"><b>Context used and past conversations</b> at a glance, background tasks next to the live session.</span><span lang="fr"><b>Contexte utilisé et conversations passées</b> d'un coup d'œil, tâches de fond à côté de la session en direct.</span></li>
+        <li><span lang="en"><b>Real tmux sessions on the server:</b> attach to the same session over SSH, e.g. <code>tmux attach -t &lt;Project&gt;</code> with a systemd install.</span><span lang="fr"><b>De vraies sessions tmux sur le serveur :</b> rattache-toi à la même session en SSH, par exemple <code>tmux attach -t &lt;Projet&gt;</code> avec une installation systemd.</span></li>
+        <li><span lang="en"><b>Untrusted repositories stay in check:</b> if a repository has its own agent configuration (<code>.claude/settings.json</code>, <code>.mcp.json</code>), Helmshell asks first.</span><span lang="fr"><b>Les dépôts non fiables restent sous contrôle :</b> si un dépôt a sa propre configuration d'agent (<code>.claude/settings.json</code>, <code>.mcp.json</code>), Helmshell demande d'abord.</span></li>
+        <li><span lang="en"><b>Claude Code extras:</b> Remote Control (claude.ai link and QR code to follow a session from the Claude app) and plan usage gauges.</span><span lang="fr"><b>En plus avec Claude Code :</b> Remote Control (lien claude.ai et QR code pour suivre une session depuis l'application Claude) et jauges d'utilisation du forfait.</span></li>
+      </ul>
+    </div>
+
+    <div class="panes" aria-hidden="true">
+      <div class="pane">
+        <div class="pane-head"><span class="dot claude"></span>Claude Code<span class="pane-proj">~/projects/web-app</span></div>
+        <div class="pane-body">
+          <span class="ln w70"></span><span class="ln w45 hl"></span><span class="ln w85"></span><span class="ln w60"></span><span class="ln w30 hl"></span><span class="ln w75"></span>
+          <span class="prompt">❯ <i class="caret"></i></span>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-head"><span class="dot codex"></span>Codex<span class="pane-proj">~/projects/api</span></div>
+        <div class="pane-body">
+          <span class="ln w55"></span><span class="ln w80"></span><span class="ln w40 hl2"></span><span class="ln w65"></span><span class="ln w50"></span>
+          <span class="prompt">› <i class="caret"></i></span>
+        </div>
+      </div>
+      <div class="tmux-bar"><span>tmux</span><span>web-app</span><span>api</span><span class="grow"></span><span>my-server</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== deploy -->
+<section class="section" id="deploy" aria-labelledby="deploy-title">
+  <div class="wrap split rev">
+    <div class="deploy-visual" aria-hidden="true">
+      <div class="dv-card">
+        <div class="dv-head"><span>Coolify / Dokploy</span><span lang="en">Status</span><span lang="fr">État</span></div>
+        <div class="dv-row"><span class="pill ok"></span><b>web-app</b><span class="muted">app.example.com</span></div>
+        <div class="dv-row"><span class="pill ok"></span><b>api</b><span class="muted">api.example.com</span></div>
+        <div class="dv-row"><span class="pill warn"></span><b>docs</b><span class="muted">docs.example.com</span></div>
+        <div class="dv-actions"><span lang="en">Deploy</span><span lang="fr">Déployer</span><span lang="en">Restart</span><span lang="fr">Redémarrer</span><span lang="en">Stop</span><span lang="fr">Arrêter</span></div>
+      </div>
+      <div class="dv-tags"><span lang="en">Logs</span><span lang="fr">Logs</span><span lang="en">Domains</span><span lang="fr">Domaines</span><span lang="en">Variables</span><span lang="fr">Variables</span><span lang="en">History</span><span lang="fr">Historique</span></div>
+    </div>
+    <div>
+      <p class="kicker"><span lang="en">Deployments</span><span lang="fr">Déploiements</span></p>
+      <h2 id="deploy-title"><span lang="en">Ship with Coolify or Dokploy</span><span lang="fr">Mets en ligne avec Coolify ou Dokploy</span></h2>
+      <p class="sub"><span lang="en">Connect your deployment tool with an API token in Settings › Deployment. Without a tool, everything related to deployment disappears from the interface.</span><span lang="fr">Connecte ton outil de déploiement avec un jeton d'API dans Paramètres › Déploiement. Sans outil, tout ce qui concerne le déploiement disparaît de l'interface.</span></p>
+      <ul class="checks" role="list">
+        <li><span lang="en"><b>Deployments page:</b> status, domains, logs, history; deploy, restart or stop.</span><span lang="fr"><b>Page Déploiements :</b> état, domaines, logs, historique ; déployer, redémarrer ou arrêter.</span></li>
+        <li><span lang="en"><b>Deployment tab of a project:</b> logs, variables and domains, right next to the code.</span><span lang="fr"><b>Onglet Déploiement d'un projet :</b> logs, variables et domaines, juste à côté du code.</span></li>
+        <li><span lang="en"><b>New project</b> can create the Coolify or Dokploy application, and failed deployments show up on Home.</span><span lang="fr"><b>Un nouveau projet</b> peut créer l'application Coolify ou Dokploy, et les déploiements en échec remontent sur l'Accueil.</span></li>
+        <li><span lang="en"><b>Helmshell itself</b> deploys as a Docker Compose resource on Coolify or Dokploy.</span><span lang="fr"><b>Helmshell lui-même</b> se déploie comme ressource Docker Compose sur Coolify ou Dokploy.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ security -->
+<section class="section alt" id="security" aria-labelledby="security-title">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="kicker"><span lang="en">Security</span><span lang="fr">Sécurité</span></p>
+      <h2 id="security-title"><span lang="en">A shell on your server deserves a lock</span><span lang="fr">Un shell sur ton serveur mérite un verrou</span></h2>
+    </header>
+
+    <div class="callout" role="note">
+      <svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>
+      <p><span lang="en"><b>Helmshell gives a shell on your server.</b> Keep it on your local network or behind a VPN (Tailscale, NetBird, WireGuard). Do not forward its port to the Internet; for access through a domain name, put it behind a trusted proxy and read the <a href="https://github.com/MrDDream/Helmshell#network-access">network access</a> notes first.</span><span lang="fr"><b>Helmshell donne un shell sur ton serveur.</b> Garde-le sur ton réseau local ou derrière un VPN (Tailscale, NetBird, WireGuard). Ne redirige pas son port sur Internet ; pour un accès par nom de domaine, place-le derrière un proxy de confiance et lis d'abord la partie <a href="https://github.com/MrDDream/Helmshell/blob/main/README.fr.md#accès-réseau">Accès réseau</a>.</span></p>
+    </div>
+
+    <ul class="grid sec" role="list">
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-globe"/></svg></span>
+        <h3><span lang="en">Network access</span><span lang="fr">Accès réseau</span></h3>
+        <p><span lang="en">Choose where Helmshell answers from: local network, VPN, a domain behind a trusted proxy, specific IPs. Everything else gets a 403 before the login page. It refuses a setting that would cut your own connection.</span><span lang="fr">Choisis d'où Helmshell répond : réseau local, VPN, domaine derrière un proxy de confiance, IP précises. Le reste reçoit une 403 avant la page de connexion. Il refuse un réglage qui couperait ta propre connexion.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-user"/></svg></span>
+        <h3><span lang="en">Login: password, 2FA, OIDC</span><span lang="fr">Connexion : mot de passe, 2FA, OIDC</span></h3>
+        <p><span lang="en">PBKDF2-hashed password, optional TOTP two-factor with 8 recovery codes, OIDC (Authentik, Keycloak, Pocket ID, Authelia, Zitadel, Google…) with an “Only allow OIDC” option.</span><span lang="fr">Mot de passe haché en PBKDF2, double authentification TOTP facultative avec 8 codes de secours, OIDC (Authentik, Keycloak, Pocket ID, Authelia, Zitadel, Google…) avec l'option « N'autoriser que l'OIDC ».</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg></span>
+        <h3><span lang="en">Sessions</span><span lang="fr">Sessions</span></h3>
+        <p><span lang="en">Signed <code>HttpOnly</code> + <code>SameSite=Strict</code> cookie, anti-CSRF header, login attempt limits, separate login log. Sign out all devices in one click.</span><span lang="fr">Cookie signé <code>HttpOnly</code> + <code>SameSite=Strict</code>, en-tête anti-CSRF, limitation des tentatives, journal des connexions séparé. Déconnecte tous les appareils en un clic.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg></span>
+        <h3><span lang="en">Strict headers, checked host</span><span lang="fr">En-têtes stricts, hôte contrôlé</span></h3>
+        <p><span lang="en">Strict CSP with no external script, <code>nosniff</code> and <code>frame-ancestors 'none'</code>. Unknown host names get a 421 (DNS rebinding protection).</span><span lang="fr">CSP stricte sans script externe, <code>nosniff</code> et <code>frame-ancestors 'none'</code>. Un nom d'hôte inconnu reçoit une 421 (protection contre le DNS rebinding).</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg></span>
+        <h3><span lang="en">Repositories are untrusted</span><span lang="fr">Les dépôts sont non fiables</span></h3>
+        <p><span lang="en">Markdown sanitized by DOMPurify, bounded file reads, paths confined to the project, sandboxed agent for commit messages. Server secrets never reach terminals or agents.</span><span lang="fr">Markdown nettoyé par DOMPurify, lectures bornées, chemins confinés au projet, agent cloisonné pour les messages de commit. Les secrets du serveur n'atteignent ni les terminaux ni les agents.</span></p>
+      </li>
+      <li class="card">
+        <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-box"/></svg></span>
+        <h3><span lang="en">Hardened container</span><span lang="fr">Conteneur durci</span></h3>
+        <p><span lang="en">Pinned base image, IPv4 only, no privilege escalation, reduced capabilities, memory and process limits. Release images built by GitHub Actions pinned by commit SHA.</span><span lang="fr">Image de base épinglée, IPv4 seulement, pas d'élévation de privilèges, capacités réduites, limites de mémoire et de processus. Images construites par GitHub Actions épinglées par empreinte de commit.</span></p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================= install -->
+<section class="section" id="install" aria-labelledby="install-title">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="kicker"><span lang="en">Get started</span><span lang="fr">Démarrer</span></p>
+      <h2 id="install-title"><span lang="en">Install in a few minutes</span><span lang="fr">Installe en quelques minutes</span></h2>
+    </header>
+
+    <div class="install">
+      <div class="prereq">
+        <h3><span lang="en">Before you start</span><span lang="fr">Avant de commencer</span></h3>
+        <ol class="steps">
+          <li><span lang="en">A <b>Linux server</b> with <b>systemd</b> (Ubuntu, Debian, Fedora…), reachable over SSH, with your normal (non-root) user.</span><span lang="fr">Un <b>serveur Linux</b> avec <b>systemd</b> (Ubuntu, Debian, Fedora…), accessible en SSH, avec ton utilisateur habituel (pas root).</span></li>
+          <li><span lang="en"><b>Python 3.10</b> or newer, <b>tmux</b> and <b>git</b>. The installer offers to install them, after asking.</span><span lang="fr"><b>Python 3.10</b> ou plus, <b>tmux</b> et <b>git</b>. L'installateur propose de les installer, après t'avoir demandé.</span></li>
+          <li><span lang="en">At least one <b>AI agent installed and logged in</b>: Claude Code (<code>claude</code> then <code>/login</code>) or OpenAI Codex CLI (<code>codex login</code>).</span><span lang="fr">Au moins un <b>agent IA installé et connecté</b> : Claude Code (<code>claude</code> puis <code>/login</code>) ou OpenAI Codex CLI (<code>codex login</code>).</span></li>
+          <li><span lang="en">A <b>local network or a VPN</b> (Tailscale, NetBird, WireGuard) between your devices and the server, and a <b>fixed IP</b> for the server.</span><span lang="fr">Un <b>réseau local ou un VPN</b> (Tailscale, NetBird, WireGuard) entre tes appareils et le serveur, et une <b>IP fixe</b> pour le serveur.</span></li>
+        </ol>
+        <p class="small"><a href="https://github.com/MrDDream/Helmshell#before-you-start" data-readme="#before-you-start|#avant-de-commencer"><span lang="en">Agent install commands in the README</span><span lang="fr">Commandes d'installation des agents dans le README</span><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
+      </div>
+
+      <div class="methods">
+        <div class="tabs inst-tabs" role="tablist" data-t-aria-label="Installation methods|Méthodes d'installation" aria-label="Installation methods">
+          <button type="button" role="tab" id="itab-quick" aria-controls="ipanel-quick" aria-selected="true"><span lang="en">Quick install</span><span lang="fr">Installation rapide</span></button>
+          <button type="button" role="tab" id="itab-docker" aria-controls="ipanel-docker" aria-selected="false" tabindex="-1">Docker Compose</button>
+          <button type="button" role="tab" id="itab-paas" aria-controls="ipanel-paas" aria-selected="false" tabindex="-1">Coolify / Dokploy</button>
+          <button type="button" role="tab" id="itab-systemd" aria-controls="ipanel-systemd" aria-selected="false" tabindex="-1">systemd</button>
+        </div>
+
+        <div class="ipanel" role="tabpanel" id="ipanel-quick" aria-labelledby="itab-quick" tabindex="0">
+          <p><span lang="en">One line on the server, as your normal user. The installer asks, step by step: language, prerequisites, AI agents, mode (systemd or Docker Compose), projects folder, port, allowed networks and password.</span><span lang="fr">Une ligne sur le serveur, avec ton utilisateur habituel. L'installateur demande, étape par étape : langue, prérequis, agents IA, mode (systemd ou Docker Compose), dossier des projets, port, réseaux autorisés et mot de passe.</span></p>
+          <div class="code"><pre><code>curl -fsSL https://raw.githubusercontent.com/MrDDream/Helmshell/main/install.sh | bash</code></pre><button type="button" class="copy"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span class="c-label"><span lang="en">Copy</span><span lang="fr">Copier</span></span><span class="c-done"><span lang="en">Copied</span><span lang="fr">Copié</span></span></button></div>
+          <p class="small"><span lang="en">Prefer to read the script first?</span><span lang="fr">Tu préfères lire le script avant ?</span></p>
+          <div class="code"><pre><code>git clone https://github.com/MrDDream/Helmshell.git ~/helmshell &amp;&amp; ~/helmshell/install.sh</code></pre><button type="button" class="copy"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span class="c-label"><span lang="en">Copy</span><span lang="fr">Copier</span></span><span class="c-done"><span lang="en">Copied</span><span lang="fr">Copié</span></span></button></div>
+          <p class="small opts"><span lang="en">Options: <code>--yes</code>, <code>--lang en|fr</code>, <code>--mode systemd|docker</code>, <code>--port N</code>, <code>--networks CIDRs</code>, <code>--dry-run</code> (show every action without changing anything), <code>--help</code>… With the one-liner: <code>| bash -s -- --dry-run</code>.</span><span lang="fr">Options : <code>--yes</code>, <code>--lang en|fr</code>, <code>--mode systemd|docker</code>, <code>--port N</code>, <code>--networks CIDR</code>, <code>--dry-run</code> (affiche chaque action sans rien modifier), <code>--help</code>… Avec la ligne unique : <code>| bash -s -- --dry-run</code>.</span></p>
+        </div>
+
+        <div class="ipanel" role="tabpanel" id="ipanel-docker" aria-labelledby="itab-docker" tabindex="0" hidden>
+          <p><span lang="en">The image <code>ghcr.io/mrddream/helmshell</code> (amd64 and arm64) runs as <b>your</b> user and drives a <b>tmux server on the host</b>: agent sessions and terminals really run on the server and survive container restarts.</span><span lang="fr">L'image <code>ghcr.io/mrddream/helmshell</code> (amd64 et arm64) tourne sous <b>ton</b> utilisateur et pilote un <b>serveur tmux de l'hôte</b> : les sessions des agents et les terminaux tournent vraiment sur le serveur et survivent aux redémarrages du conteneur.</span></p>
+          <div class="code">
+<pre lang="en"><code>git clone https://github.com/MrDDream/Helmshell.git ~/helmshell
+cd ~/helmshell
+./deploy/prepare-host.sh            # host tmux server (helmshell-tmux service), prints your values
+sudo loginctl enable-linger $USER
+cp deploy/.env.example deploy/.env  # fill in HELMSHELL_HOME, HOST_USER, HOST_UID, HOST_GID
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d</code></pre>
+<pre lang="fr"><code>git clone https://github.com/MrDDream/Helmshell.git ~/helmshell
+cd ~/helmshell
+./deploy/prepare-host.sh            # serveur tmux de l'hôte (service helmshell-tmux), affiche tes valeurs
+sudo loginctl enable-linger $USER
+cp deploy/.env.example deploy/.env  # renseigne HELMSHELL_HOME, HOST_USER, HOST_UID, HOST_GID, HELMSHELL_LANG=fr
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d</code></pre>
+<button type="button" class="copy"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span class="c-label"><span lang="en">Copy</span><span lang="fr">Copier</span></span><span class="c-done"><span lang="en">Copied</span><span lang="fr">Copié</span></span></button></div>
+          <p class="small"><span lang="en"><code>./install.sh --mode docker</code> does the same. Agents must be installed inside your home directory (e.g. <code>~/.local/bin</code>) to be visible from the container. Pin a version with <code>HELMSHELL_VERSION=0.1.0</code> in <code>deploy/.env</code>.</span><span lang="fr"><code>./install.sh --mode docker</code> fait la même chose. Les agents doivent être installés dans ton dossier personnel (ex. <code>~/.local/bin</code>) pour être visibles depuis le conteneur. Pour figer une version : <code>HELMSHELL_VERSION=0.1.0</code> dans <code>deploy/.env</code>.</span></p>
+        </div>
+
+        <div class="ipanel" role="tabpanel" id="ipanel-paas" aria-labelledby="itab-paas" tabindex="0" hidden>
+          <ol class="steps">
+            <li><span lang="en">On the host: clone the repository, run <code>./deploy/prepare-host.sh</code> then <code>sudo loginctl enable-linger $USER</code>.</span><span lang="fr">Sur l'hôte : clone le dépôt, lance <code>./deploy/prepare-host.sh</code> puis <code>sudo loginctl enable-linger $USER</code>.</span></li>
+            <li><span lang="en">Create a <b>Docker Compose</b> resource (Coolify: <i>+ New › Docker Compose Empty</i>; Dokploy: <i>Compose</i>) and paste the content of <a href="https://github.com/MrDDream/Helmshell/blob/main/deploy/docker-compose.yml"><code>deploy/docker-compose.yml</code></a>.</span><span lang="fr">Crée une ressource <b>Docker Compose</b> (Coolify : <i>+ New › Docker Compose Empty</i> ; Dokploy : <i>Compose</i>) et colle le contenu de <a href="https://github.com/MrDDream/Helmshell/blob/main/deploy/docker-compose.yml"><code>deploy/docker-compose.yml</code></a>.</span></li>
+            <li><span lang="en">Set the variables of <a href="https://github.com/MrDDream/Helmshell/blob/main/deploy/.env.example"><code>deploy/.env.example</code></a> in the resource's environment variables tab, then deploy. No domain needed: access is through port 8787.</span><span lang="fr">Renseigne les variables de <a href="https://github.com/MrDDream/Helmshell/blob/main/deploy/.env.example"><code>deploy/.env.example</code></a> dans l'onglet des variables d'environnement de la ressource, puis déploie. Pas besoin de domaine : l'accès se fait par le port 8787.</span></li>
+          </ol>
+        </div>
+
+        <div class="ipanel" role="tabpanel" id="ipanel-systemd" aria-labelledby="itab-systemd" tabindex="0" hidden>
+          <p><span lang="en">The recommended manual setup: a systemd user service.</span><span lang="fr">L'installation manuelle recommandée : un service utilisateur systemd.</span></p>
+          <div class="code">
+<pre lang="en"><code>git clone https://github.com/MrDDream/Helmshell.git ~/helmshell
+cd ~/helmshell
+./install.sh --mode systemd
+sudo loginctl enable-linger $USER   # so the service runs without an open session</code></pre>
+<pre lang="fr"><code>git clone https://github.com/MrDDream/Helmshell.git ~/helmshell
+cd ~/helmshell
+./install.sh --mode systemd --lang fr
+sudo loginctl enable-linger $USER   # pour que le service tourne sans session ouverte</code></pre>
+<button type="button" class="copy"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span class="c-label"><span lang="en">Copy</span><span lang="fr">Copier</span></span><span class="c-done"><span lang="en">Copied</span><span lang="fr">Copié</span></span></button></div>
+          <p class="small"><span lang="en">Then: <code>systemctl --user status helmshell</code>, <code>journalctl --user -u helmshell -f</code>.</span><span lang="fr">Ensuite : <code>systemctl --user status helmshell</code>, <code>journalctl --user -u helmshell -f</code>.</span></p>
+        </div>
+
+        <div class="after">
+          <div>
+            <h3><span lang="en">First login</span><span lang="fr">Premier lancement</span></h3>
+            <p><span lang="en">Open <code>http://&lt;server-IP&gt;:8787</code> from your local network or VPN. The initial password is printed by the installer and stored in <code>~/.config/helmshell/mot-de-passe-initial.txt</code>; change it in Settings › Security.</span><span lang="fr">Ouvre <code>http://&lt;IP-du-serveur&gt;:8787</code> depuis ton réseau local ou ton VPN. Le mot de passe initial est affiché par l'installateur et rangé dans <code>~/.config/helmshell/mot-de-passe-initial.txt</code> ; change-le dans Paramètres › Sécurité.</span></p>
+          </div>
+          <div>
+            <h3><span lang="en">Updating</span><span lang="fr">Mettre à jour</span></h3>
+            <p><span lang="en">Helmshell shows a badge when a new release is out. Run <code>~/helmshell/install.sh</code> again: it offers to update and keeps your settings.</span><span lang="fr">Helmshell affiche un badge quand une nouvelle version sort. Relance <code>~/helmshell/install.sh</code> : il propose la mise à jour et garde tes réglages.</span></p>
+          </div>
+        </div>
+        <p class="more"><a href="https://github.com/MrDDream/Helmshell#readme" data-readme="#readme|"><span lang="en">Full documentation: configuration, environment variables, security</span><span lang="fr">Documentation complète : configuration, variables d'environnement, sécurité</span><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================= cta -->
+<section class="final">
+  <div class="wrap final-in">
+    <img src="assets/logo.svg" alt="" width="56" height="56">
+    <h2><span lang="en">Take the helm</span><span lang="fr">Prends la barre</span></h2>
+    <p><span lang="en">Click around the demo, then install Helmshell on your own server.</span><span lang="fr">Fais un tour dans la démo, puis installe Helmshell sur ton propre serveur.</span></p>
+    <div class="cta">
+      <a class="btn primary" data-demo href="demo/?lang=en&amp;theme=light"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span lang="en">Try the live demo</span><span lang="fr">Essayer la démo</span></a>
+      <a class="btn" href="https://github.com/MrDDream/Helmshell"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg><span lang="en">Star on GitHub</span><span lang="fr">Voir sur GitHub</span></a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-in">
+    <div class="f-brand">
+      <img src="assets/logo.svg" alt="" width="28" height="28">
+      <span>Helmshell</span>
+    </div>
+    <nav class="f-links" data-t-aria-label="Links|Liens" aria-label="Links">
+      <a href="https://github.com/MrDDream/Helmshell">GitHub</a>
+      <a href="https://github.com/MrDDream/Helmshell/releases"><span lang="en">Releases</span><span lang="fr">Versions</span></a>
+      <a href="https://github.com/MrDDream/Helmshell/blob/main/LICENSE"><span lang="en">MIT license</span><span lang="fr">Licence MIT</span></a>
+      <a href="https://github.com/MrDDream/Helmshell/blob/main/THIRD_PARTY.md"><span lang="en">Third-party credits</span><span lang="fr">Composants tiers</span></a>
+      <a href="https://github.com/MrDDream/Helmshell/security"><span lang="en">Report a vulnerability</span><span lang="fr">Signaler une faille</span></a>
+    </nav>
+    <p class="f-legal"><span lang="en">Helmshell is an independent project, not affiliated with Anthropic or OpenAI. Claude and Claude Code are trademarks of Anthropic; OpenAI and Codex are trademarks of OpenAI. Coolify and Dokploy belong to their respective owners.</span><span lang="fr">Helmshell est un projet indépendant, sans lien avec Anthropic ni OpenAI. Claude et Claude Code sont des marques d'Anthropic ; OpenAI et Codex sont des marques d'OpenAI. Coolify et Dokploy appartiennent à leurs détenteurs respectifs.</span></p>
+  </div>
+</footer>
+</body>
+</html>

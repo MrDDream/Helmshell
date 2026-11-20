@@ -1,0 +1,73 @@
+# Helmshell in a container: Docker Compose, Coolify ("Docker Compose Empty") or Dokploy ("Compose").
+#
+# The container runs as YOUR host user (same UID, same home directory, mounted at the same path) and
+# drives the host's tmux server (see deploy/prepare-host.sh): agent sessions and terminals really run on
+# the host and survive container restarts.
+#
+# Settings: copy deploy/.env.example to deploy/.env (Docker Compose) or set the same variables in
+# Coolify / Dokploy. HELMSHELL_HOME and HOST_USER are required.
+services:
+  helmshell:
+    # Official image, built from the Dockerfile at the root of the repository for every release.
+    # Pin a version with HELMSHELL_VERSION (e.g. 0.1.0); update with: docker compose pull && docker compose up -d
+    image: ghcr.io/mrddream/helmshell:${HELMSHELL_VERSION:-latest}
+    # --- Development: run the code mounted from the host instead of the image -----------------------
+    # Replace the "image:" line above with the two lines below, and uncomment HELMSHELL_DIR further down.
+    # python3, tmux and git are installed on first start (a minute or two), then the cloned folder
+    # ($HELMSHELL_DIR, default $HELMSHELL_HOME/helmshell) is executed as is.
+    # image: ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+    # command: ["bash", "${HELMSHELL_DIR:-${HELMSHELL_HOME:?HELMSHELL_HOME must be set}/helmshell}/deploy/container-start.sh"]
+    restart: unless-stopped
+    ports:
+      # IPv4 only: without "0.0.0.0:", Docker also opens the port on the host's public IPv6, relayed by
+      # docker-proxy with an internal address that the access filter would take for a local one.
+      - "0.0.0.0:${HELMSHELL_PORT:-8787}:8787"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      HELMSHELL_HOST: 0.0.0.0
+      HELMSHELL_PORT: 8787
+      # Development only (code mounted from the host):
+      # HELMSHELL_DIR: ${HELMSHELL_DIR:-${HELMSHELL_HOME}/helmshell}
+      # Initial interface language (en or fr); can be changed later in Settings › Appearance.
+      HELMSHELL_LANGUAGE: ${HELMSHELL_LANG:-en}
+      # Networks allowed until network access is configured in Settings › Security (192.168.x and the
+      # Tailscale / NetBird VPN range by default). Everything else gets a 403 error.
+      HELMSHELL_ALLOWED_NETWORKS: ${HELMSHELL_ALLOWED_NETWORKS:-192.168.0.0/16,100.64.0.0/10}
+      HELMSHELL_TMUX_SOCKET: ${HELMSHELL_HOME:?HELMSHELL_HOME must be set (your home directory on the host)}/.config/helmshell/tmux.sock
+      HELMSHELL_HOSTNAME: ${HELMSHELL_HOSTNAME:-}
+      # Projects folder (inside your home directory); empty = Helmshell's default, editable in Settings.
+      PROJECTS_ROOT: ${HELMSHELL_PROJECTS_ROOT:-}
+      HELMSHELL_UPDATE_CHECK: ${HELMSHELL_UPDATE_CHECK:-1}
+      COOLIFY_URL: ${COOLIFY_URL:-http://host.docker.internal:8000}
+      HOST_USER: ${HOST_USER:?HOST_USER must be set (your user name on the host)}
+      HOST_UID: ${HOST_UID:-1000}
+      HOST_GID: ${HOST_GID:-1000}
+      HOST_HOME: ${HELMSHELL_HOME}
+    volumes:
+      # Home directory: projects (~/projects), ~/.claude, ~/.codex, agents in ~/.local/bin, SSH keys,
+      # Git config, Helmshell's data (~/.config/helmshell) and the host tmux socket.
+      - ${HELMSHELL_HOME}:${HELMSHELL_HOME}
+    healthcheck:
+      # The server accepts connections (the development variant installs python3 first, hence the delay)
+      test: ["CMD-SHELL", "python3 -c \"import socket; socket.create_connection(('127.0.0.1', 8787), 5)\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    # Safeguards: bounded memory and process count, no privilege escalation, and only the capabilities
+    # needed at startup (apt install in development, user creation, switching to its UID).
+    mem_limit: 2g
+    pids_limit: 1024
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - FSETID
+      - SETUID
+      - SETGID
+      - KILL

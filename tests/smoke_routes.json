@@ -1,0 +1,4 @@
+{"get": ["/api/metrics", "/api/repo-sessions", "/api/terminals", "/api/trash", "/api/tasks", "/api/tasks?project={slug}",
+         "/api/projects/{slug}/files", "/api/projects/{slug}/search?q=Bonjour",
+         "/api/projects/{slug}/commands", "/api/projects/{slug}/git/branches",
+         "/api/projects/{slug}/git/log"]}
