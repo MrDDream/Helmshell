@@ -1357,7 +1357,7 @@ void main() {
       commandsSaved: [{ label: 'Build', cmd: 'make build' }, { label: 'Tests', cmd: 'go test ./...' }],
       git: {
         branch: 'feat/watch-mode', ahead: 2, behind: 0, upstream: true, fetched: min(30),
-        changes: [{ kind: 'M', path: 'cmd/watch.go', add: 6, del: 2 }],
+        changes: [],
         local: [['main', false, 'origin/main', 60 * 20], ['feat/watch-mode', true, 'origin/feat/watch-mode', 41], ['fix/symlinks', false, '', 60 * 4]],
         remoteBranches: [],
         log: commits('tidy', [
@@ -1389,7 +1389,7 @@ void main() {
       remote: 'https://git.example.com/alex/handbook.git', app: 'docs',
       git: {
         branch: 'main', ahead: 0, behind: 0, upstream: true, fetched: min(60 * 6),
-        changes: [{ kind: 'M', path: 'src/content/docs/backups.md', add: 4, del: 1 }],
+        changes: [],
         local: [['main', true, 'origin/main', 60 * 6]], remoteBranches: [],
         log: commits('handbook', [
           [60 * 6, SAM, 'Incidents: first steps', 'HEAD -> main, origin/main', [['src/content/docs/incidents.md', 12, 0]]],
@@ -1430,7 +1430,7 @@ void main() {
       remote: '', app: '',
       git: {
         branch: 'main', ahead: 0, behind: 0, upstream: false, fetched: 0,
-        changes: [{ kind: 'M', path: 'lib/screens/garden_screen.dart', add: 3, del: 1 }, { kind: 'A', path: 'assets/icon.png', add: 0, del: 0 }],
+        changes: [],
         local: [['main', true, '', 60 * 30]], remoteBranches: [],
         log: commits('garden', [
           [60 * 30, ALEX, 'Watering button on each plant', 'HEAD -> main', [['lib/screens/garden_screen.dart', 8, 2]]],
@@ -1581,20 +1581,6 @@ index 2b7d4e0..e01f9c3 100644
         ],
       },
       {
-        id: `${min(60 * 2)}-d4e5f6`, slug: 'ledger-api', agent: 'claude', mode: 'acceptEdits', kind: '', started: min(60 * 2 + 14), finished: min(60 * 2 + 3), status: 'ok',
-        prompt: L('Mets à jour les dépendances et corrige les avertissements de dépréciation des tests.', 'Update the dependencies and fix the deprecation warnings in the tests.'),
-        events: [
-          { k: 'tool', name: 'Bash', detail: 'uv lock --upgrade' },
-          { k: 'tool', name: 'Bash', detail: 'uv run pytest -q' },
-          { k: 'text', t: L('3 avertissements : `datetime.utcnow()` est déprécié.', '3 warnings: `datetime.utcnow()` is deprecated.') },
-          { k: 'tool', name: 'Edit', detail: 'app/routers/invoices.py' },
-          { k: 'tool', name: 'Bash', detail: 'uv run pytest -q' },
-        ],
-        result: { error: false, turns: 9, duration: 642, cost: 0.41, text: L(
-          '## Dépendances à jour\n\n- **fastapi** 0.115.2 → 0.115.6\n- **sqlalchemy** 2.0.35 → 2.0.36\n- **pytest-asyncio** 0.24 → 0.25\n\nLes avertissements venaient de `datetime.utcnow()` : remplacé par `datetime.now(UTC)` dans `app/routers/invoices.py`.\n\n`uv run pytest` : **14 tests passent**, plus aucun avertissement. Rien n’est validé : les changements t’attendent dans l’onglet Git.',
-          '## Dependencies updated\n\n- **fastapi** 0.115.2 → 0.115.6\n- **sqlalchemy** 2.0.35 → 2.0.36\n- **pytest-asyncio** 0.24 → 0.25\n\nThe warnings came from `datetime.utcnow()`: replaced with `datetime.now(UTC)` in `app/routers/invoices.py`.\n\n`uv run pytest`: **14 tests pass**, no warnings left. Nothing is committed: the changes are waiting in the Git tab.') },
-      },
-      {
         id: `${min(60 * 3)}-0c1e2a`, slug: 'homelab-stack', agent: 'claude', mode: 'plan', kind: 'clean-report', started: min(60 * 3 + 6), finished: min(60 * 3), status: 'ok',
         prompt: 'Take stock of what is no longer needed in this project, without modifying or deleting anything:',
         events: [
@@ -1605,17 +1591,6 @@ index 2b7d4e0..e01f9c3 100644
         result: { error: false, turns: 4, duration: 214, text: L(
           '## Inventaire\n\n**Sûr à supprimer**\n- `nginx/nginx.conf` : bloc `location /status/` en double avec Uptime Kuma exposé sur 3001.\n\n**À vérifier**\n- `Makefile` : la cible `down` n’est plus utilisée (voir CLAUDE.md : jamais de `down -v`).\n\n**À garder**\n- `scripts/backup.sh` : appelé par le timer systemd.\n\nRien n’a été modifié.',
           '## Inventory\n\n**Safe to delete**\n- `nginx/nginx.conf`: the `location /status/` block duplicates Uptime Kuma exposed on 3001.\n\n**To check**\n- `Makefile`: the `down` target is no longer used (see CLAUDE.md: never `down -v`).\n\n**Keep**\n- `scripts/backup.sh`: called by the systemd timer.\n\nNothing was modified.') },
-      },
-      {
-        id: `${min(60 * 9)}-7f8e9d`, slug: 'handbook', agent: 'codex', mode: 'auto', kind: '', started: min(60 * 9 + 4), finished: min(60 * 9), status: 'error',
-        prompt: L('Vérifie tous les liens internes du site et corrige ceux qui sont cassés.', 'Check every internal link of the site and fix the broken ones.'),
-        events: [
-          { k: 'tool', name: 'shell', detail: 'npm run check-links' },
-          { k: 'text', t: L('`linkinator` n’est pas installé : `npm install` a besoin du réseau, refusé par le bac à sable.', '`linkinator` is not installed: `npm install` needs the network, refused by the sandbox.') },
-        ],
-        result: { error: true, turns: 3, duration: 96, text: L(
-          'Impossible de lancer la vérification : `npm install` demande un accès réseau, refusé en mode **Automatique**. Relance la tâche en **Accès complet**, ou installe les dépendances d’abord (`npm install`).',
-          'Could not run the check: `npm install` needs network access, which **Automatic** mode refuses. Retry with **Full access**, or install the dependencies first (`npm install`).') },
       },
       {
         id: `${min(60 * 20)}-3b4c5d`, slug: 'tidy', agent: 'codex', mode: 'auto', kind: '', started: min(60 * 20 + 7), finished: min(60 * 20 + 1), status: 'ok',

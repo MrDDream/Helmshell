@@ -1722,3 +1722,19 @@ dialog.agentdlg h2 { font-size: 22px; line-height: 28px; }
   .topbar > .ai-chips:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
   .ai-chips:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) .claude-chip { width: 100%; justify-content: flex-start; min-width: 0; }
 }
+/* Ordinateur : barre du haut sur une seule ligne, même avec les deux boutons d'utilisation (Claude, Codex) ;
+   la recherche rétrécit, puis les boutons et les jauges perdent leur petit libellé */
+@media (min-width: 901px) {
+  .topbar { flex-wrap: nowrap; }
+  .topbar > .cmdk { flex: 1 1 auto; max-width: 640px; min-width: 180px; }
+  .topbar > .ai-chips, .topbar > .health, .topbar > .avatar { flex: none; }
+}
+@media (min-width: 901px) and (max-width: 1360px) {
+  .ai-chips:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) .claude-chip { gap: 6px; padding: 0 10px 0 8px; }
+  .ai-chips:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) .claude-chip > svg { display: none; }
+}
+@media (min-width: 901px) and (max-width: 1180px) {
+  .ai-chips:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) .claude-chip .txt span { display: none; }
+  .gauge .txt span { display: none; }
+  .topbar > .cmdk kbd { display: none; }
+}
