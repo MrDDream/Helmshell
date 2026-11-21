@@ -123,7 +123,9 @@ Partout : **Ctrl K** (palette), **?** (raccourcis), `g` puis une lettre pour cha
      Voir la [documentation de Claude Code](https://docs.claude.com/claude-code).
    - **OpenAI Codex CLI** (Node.js 18 ou plus pour l'installation par npm) : `npm install -g @openai/codex`
      (ou `curl -fsSL https://chatgpt.com/codex/install.sh | sh`), puis `codex login`
-     (`codex login --device-auth` en SSH).
+     (`codex login --device-auth` en SSH). Sur Ubuntu 24.04 et suivantes, installe aussi le paquet système
+     `bubblewrap` (`sudo apt install bubblewrap`) : sans lui, le bac à sable de Codex ne démarre pas et ses
+     modes Lecture seule et Automatique refusent toutes les commandes (Paramètres › Agents le vérifie).
 4. Un **réseau local ou un VPN** (Tailscale, NetBird, WireGuard) entre tes appareils et le serveur, et une
    **IP fixe** pour le serveur (bail DHCP réservé dans ta box, ou l'adresse du VPN).
 
@@ -334,6 +336,13 @@ Claude Code et OpenAI Codex peuvent cohabiter : tu choisis l'agent par projet et
 détecte les agents installés (`claude` et `codex` dans le PATH ou `~/.local/bin` ; sinon `CLAUDE_BIN` /
 `CODEX_BIN`). Chaque agent doit être connecté une fois pour ton utilisateur, dans un terminal : `claude` puis
 `/login`, ou `codex login` (`codex login --device-auth` en SSH ou depuis un terminal de Helmshell).
+
+Les deux agents sont indépendants et ont les mêmes fonctions : avec un seul installé, le bouton d'un projet
+affiche **Ouvrir Claude** ou **Ouvrir Codex** ; avec les deux, **Ouvrir IA** demande lequel ouvrir. Chacun a
+son bouton d'utilisation dans la barre du haut (limites du forfait et leur réinitialisation, rythme, contexte
+des sessions ouvertes, actualisés au délai choisi dans Paramètres › Agents, sans consommer de jetons), son
+état en direct dans le terminal (travaille, attend ta validation) avec notifications, et ses conversations
+dans la page Sessions IA.
 
 - **Onglet Agent d'un projet** : un terminal attaché à la session tmux qui porte le nom du dossier, créée au
   besoin avec l'agent lancé dedans (« Reprendre la dernière conversation » au choix). Quand l'agent se

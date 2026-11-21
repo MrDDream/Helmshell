@@ -387,6 +387,51 @@ const agentPref = (slug) => { try { return agentId(localStorage.getItem(`helmshe
 const setAgentPref = (slug, a) => { try { localStorage.setItem(`helmshell.agent.${slug}`, agentId(a)); } catch (_) { /* rien */ } };
 // Session Codex ouverte pour ce projet (flux direct, sinon dernier aperçu)
 const codexSessionOf = (slug) => (liveState()?.repos || overview?.repos || []).some((r) => r.slug === slug && r.agent === 'codex');
+// Claude Code installé ? (vrai tant que /api/agents n'a pas répondu, comme avant)
+const claudeOn = () => (agentsInfo?.agents?.length ? !!agentDef('claude')?.available : true);
+// IA installées sur le serveur, Claude Code et/ou Codex : chacune indépendante, elles cohabitent
+const aiAgents = () => { const l = availableAgents(); return l.length ? l : ['claude']; };
+// Sessions d'IA ouvertes dans un projet (agent au premier plan de son terminal tmux)
+const agentReposOf = (slug) => (liveState()?.repos || overview?.repos || []).filter((r) => r.slug === slug && r.claude);
+// Libellé du bouton d'ouverture : l'IA installée, ou « Ouvrir IA » quand les deux le sont (choix dans une fenêtre)
+const openAiLabel = (list = aiAgents()) => (list.length > 1 ? t('Ouvrir IA') : list[0] === 'codex' ? t('Ouvrir Codex') : t('Ouvrir Claude'));
+// Petits logos des IA ouvertes dans un projet, avec leur état en info-bulle
+const agentMinis = (slug) => agentReposOf(slug).filter((r) => !r.branch).map((r) => { const st = repoStatus(r); return `<span class="mini ${st.cls === 'warn' ? 'warn' : 'ok'} amini" title="${esc(`${agentShort(r.agent)} : ${st.short}`)}">${agentLogo(r.agent, 14)}${esc(agentShort(r.agent))}</span>`; }).join('');
+// Fenêtre « Quelle IA ouvrir ? » : une tuile par IA installée, avec son état dans ce projet. Renvoie l'agent ou null.
+function chooseAgent(slug, name) {
+  return new Promise((resolve) => {
+    const d = document.createElement('dialog');
+    d.className = 'agentdlg';
+    const repos = agentReposOf(slug), pref = agentPref(slug);
+    const tile = (a) => {
+      const r = repos.find((x) => x.agent === a && !x.branch);
+      return `<button type="button" class="agent-tile" data-agent="${a}">${agentLogo(a, 36)}<span class="two"><b>${AGENT_LABELS[a]}</b><span class="sub">${esc(r ? repoStatus(r).short : t('Pas ouvert dans ce projet'))}</span></span>${r ? `<span class="dot ${repoStatus(r).cls === 'warn' ? 'warn' : 'ok'}"></span>` : ''}</button>`;
+    };
+    d.innerHTML = `<div class="stack" style="gap:14px">
+      <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2 style="margin:0">${t('Quelle IA ouvrir ?')}</h2><button type="button" class="btn icon ghost" data-x aria-label="${t('Fermer')}">${ic('x', 16)}</button></div>
+      <p class="small muted" style="margin:0">${t('Sur {name}. Chaque IA a son propre terminal, son historique et ses permissions.', { name: esc(name || slug) })}</p>
+      <div class="agent-tiles">${aiAgents().map(tile).join('')}</div></div>`;
+    document.body.append(d);
+    let val = null;
+    d.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-agent]');
+      if (b) { val = b.dataset.agent; d.close(); } else if (e.target === d || e.target.closest('[data-x]')) d.close();
+    });
+    d.addEventListener('close', () => { d.remove(); resolve(val); });
+    d.showModal();
+    ($(`[data-agent="${pref}"]`, d) || $('[data-agent]', d))?.focus();
+  });
+}
+// Ouvre une IA sur un projet depuis n'importe quelle page : choix si les deux sont installées, terminal si elle
+// est déjà ouverte, sinon fenêtre de lancement
+async function openAi(slug, name) {
+  await loadAgents();
+  const list = aiAgents();
+  const a = list.length > 1 ? await chooseAgent(slug, name) : list[0];
+  if (!a) return false;
+  if (agentReposOf(slug).some((r) => r.agent === a && !r.branch)) { setAgentPref(slug, a); location.hash = claudeHash(slug, null, a); return true; }
+  return launchClaude(slug, name, a, true);
+}
 
 function deployStatus(app) {
   if (!app) return { label: t('Pas de déploiement'), short: '—', dot: '', cls: 'c-muted' };
@@ -478,7 +523,7 @@ function renderLogin() {
 const NAV = [
   ['#/', 'home', t('Accueil'), /^#\/?$/, t('Accueil')],
   ['#/projets', 'folder', t('Projets'), /^#\/(projets|nouveau)/, t('Projets')],
-  ['#/sessions', 'spark', t('Sessions Claude'), /^#\/sessions/, t('Sessions')],
+  ['#/sessions', 'spark', t('Sessions IA'), /^#\/sessions/, t('Sessions')],
   ['#/terminal', 'term', t('Terminal'), /^#\/terminal/, t('Terminal')],
   ['#/deploiements', 'upload', t('Déploiements'), /^#\/deploiements/, t('Déploiem.')],
   ['#/serveur', 'server', t('Serveur'), /^#\/serveur/, t('Serveur')],
@@ -496,9 +541,7 @@ function renderShell() {
     <div class="content">
       <div class="topbar">
         <button type="button" class="cmdk" id="cmdk">${ic('search', 22, 2)}<span class="grow ellipsis">${t('Rechercher un projet, une page, une action')}</span><kbd>Ctrl K</kbd></button>
-        <button type="button" class="claude-chip" id="claude-chip" aria-haspopup="dialog" aria-label="${t('Utilisation de Claude')}" title="${t('Utilisation de Claude')}">
-          <span class="cc-ring"><svg viewBox="0 0 38 38" aria-hidden="true"><circle class="track" cx="19" cy="19" r="16"/><circle class="val" id="claude-chip-ring" cx="19" cy="19" r="16" stroke-dasharray="0 101"/></svg><img src="/logos/claude.svg" alt="" width="18" height="18"></span>
-          <span class="txt"><span id="claude-chip-l">Claude</span><b id="claude-chip-v">…</b></span>${ic('chevronDown', 16, 2)}</button>
+        <div class="ai-chips" id="ai-chips">${['claude', 'codex'].map(usageChip).join('')}</div>
         <div class="health" id="health" aria-label="${t('État du serveur')}"></div>
         <button type="button" class="avatar" id="avatar" aria-label="${t('Compte et apparence')}">${esc((window.__user || 'A').slice(0, 1).toUpperCase())}</button>
       </div>
@@ -511,10 +554,10 @@ function renderShell() {
   drawFooter();
   checkVersion();
   if (!window.__verTimer) window.__verTimer = setInterval(() => checkVersion(), 6 * 3600 * 1000);
-  loadAgents();
+  loadAgents().then(() => { showUsageChips(); loadUsageChips(); });
   applyDeployNav();
-  loadClaudeChip();
-  setInterval(() => { if (!document.hidden) loadClaudeChip(); }, 120000);
+  loadUsageChips();
+  setInterval(() => { if (!document.hidden) loadUsageChips(); }, 120000);
   $('#avatar').onclick = (e) => menu(e.currentTarget, [
     { label: t('Réglages'), icon: 'sliders', run: () => { location.hash = '#/parametres'; } },
     { label: document.documentElement.dataset.theme === 'dark' ? t('Passer en thème clair') : t('Passer en thème sombre'), icon: 'eye', run: () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') },
@@ -608,54 +651,79 @@ function drawHealth(st) {
 // Favicon (gouvernail Helmshell) avec une pastille quand quelque chose attend une réponse
 const FAVICON = (badge) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="28" fill="#E3EEF8"/><g stroke="#1F4E79" stroke-linecap="round"><path d="M60 16L60 104M16 60L104 60M29 29L91 91M91 29L29 91" stroke-width="9"/><circle cx="60" cy="60" r="27" fill="none" stroke-width="11"/></g><circle cx="60" cy="60" r="11" fill="#D97757"/>${badge ? '<circle cx="96" cy="24" r="22" fill="#F2B84B" stroke="#0E1014" stroke-width="5"/>' : ''}</svg>`)}`;
 
-/* Bouton Claude de la barre du haut : plus forte utilisation du forfait, détail dans une petite fenêtre */
-let claudeUsage = null;
-async function loadClaudeChip() {
-  try { claudeUsage = await api('GET', '/api/claude/usage'); } catch (_) { return; }
-  const v = $('#claude-chip-v'), chip = $('#claude-chip');
-  if (!v || !chip) return;
-  // Session de 5 h par défaut (sinon la limite la plus entamée)
-  const top = claudeUsage.limits.find((l) => l.id === 'session') || claudeUsage.limits.reduce((m, l) => (l.used > (m?.used ?? -1) ? l : m), null);
-  v.textContent = top ? fmtPct(top.used) : '—';
-  // Anneau : la limite affichée, libellé court à côté
+/* Boutons d'utilisation de la barre du haut, un par IA installée (Claude Code, Codex) : limite la plus
+   proche de son plafond dans un anneau, détail dans une petite fenêtre */
+const USAGE = { claude: { url: '/api/claude/usage', data: null }, codex: { url: '/api/codex/usage', data: null } };
+const usageTitle = (a) => (a === 'codex' ? t('Utilisation de Codex') : t('Utilisation de Claude'));
+function usageChip(a) {
+  return `<button type="button" class="claude-chip${a === 'codex' ? ' codex-chip' : ''}" id="${a}-chip" data-usage="${a}" aria-haspopup="dialog" aria-label="${usageTitle(a)}" title="${usageTitle(a)}" ${a === 'codex' ? 'hidden' : ''}>
+    <span class="cc-ring"><svg viewBox="0 0 38 38" aria-hidden="true"><circle class="track" cx="19" cy="19" r="16"/><circle class="val" id="${a}-chip-ring" cx="19" cy="19" r="16" stroke-dasharray="0 101"/></svg>${agentLogo(a, 18)}</span>
+    <span class="txt"><span id="${a}-chip-l">${agentShort(a)}</span><b id="${a}-chip-v">…</b></span>${ic('chevronDown', 16, 2)}</button>`;
+}
+// Seulement les IA installées (Claude affiché tant que /api/agents n'a pas répondu)
+function showUsageChips() {
+  const cl = $('#claude-chip'), cx = $('#codex-chip');
+  if (cl) cl.hidden = !claudeOn();
+  if (cx) cx.hidden = !codexOn();
+}
+// Libellé court d'une limite d'après sa durée : 5 h, sem., mois
+const limShort = (l) => (!l?.window ? '' : l.window <= 86400 ? t('{n} h', { n: Math.round(l.window / 3600) }) : l.window <= 8 * 86400 ? t('sem.') : t('mois'));
+// Limite affichée dans l'anneau : session de 5 h pour Claude (sinon la plus entamée), la plus courte pour Codex
+function usageTop(a, u) {
+  const L = u?.limits || [];
+  if (!L.length) return null;
+  if (a === 'claude') return L.find((l) => l.id === 'session') || L.reduce((m, l) => (l.used > (m?.used ?? -1) ? l : m), null);
+  return L.reduce((m, l) => (!m || (l.window || Infinity) < (m.window || Infinity) ? l : m), null);
+}
+async function loadUsageChip(a) {
+  const chip = $(`#${a}-chip`);
+  if (!chip || chip.hidden) return;
+  let u;
+  try { u = USAGE[a].data = await api('GET', USAGE[a].url); } catch (_) { return; }
+  const top = usageTop(a, u);
+  $(`#${a}-chip-v`).textContent = top ? fmtPct(top.used) : '—';
   const c = 2 * Math.PI * 16, pct = Math.max(0, Math.min(100, top?.used || 0));
-  $('#claude-chip-ring')?.setAttribute('stroke-dasharray', `${((c * pct) / 100).toFixed(1)} ${c.toFixed(1)}`);
-  const lb = $('#claude-chip-l');
-  if (lb) lb.innerHTML = top && (top.id === 'session' || top.id === 'week') ? `<i>Claude · </i>${top.id === 'session' ? t('5 h') : t('sem.')}` : 'Claude';
+  $(`#${a}-chip-ring`)?.setAttribute('stroke-dasharray', `${((c * pct) / 100).toFixed(1)} ${c.toFixed(1)}`);
+  const lb = $(`#${a}-chip-l`);
+  if (lb) lb.innerHTML = top && limShort(top) ? `<i>${agentShort(a)} · </i>${limShort(top)}` : agentShort(a);
   chip.classList.toggle('warn', !!top && top.used >= 75 && top.used < 90);
   chip.classList.toggle('err', !!top && top.used >= 90);
-  chip.title = top ? t('Utilisation de Claude · {label} : {pct}', { label: top.label, pct: fmtPct(top.used) }) : t('Utilisation de Claude');
-  if (openPop?._anchor === chip) drawClaudePop(openPop);
+  chip.title = top ? t('{title} · {label} : {pct}', { title: usageTitle(a), label: top.label, pct: fmtPct(top.used) }) : usageTitle(a);
+  if (openPop?._anchor === chip) drawUsagePop(openPop, a);
 }
-function drawClaudePop(pop) {
-  const u = claudeUsage;
+const loadUsageChips = () => { showUsageChips(); loadUsageChip('claude'); loadUsageChip('codex'); };
+function drawUsagePop(pop, a) {
+  const u = USAGE[a].data;
   const box = $('.cpop-body', pop);
   if (!box) return;
   if (!u) { box.innerHTML = '<div class="skeleton"><span class="spin"></span></div>'; return; }
-  const week = u.limits.find((l) => l.id === 'week');
+  // Rythme sur la limite la plus longue (semaine de Claude, semaine ou mois de Codex)
+  const long = a === 'claude' ? u.limits.find((l) => l.id === 'week') : u.limits.reduce((m, l) => (l.window && l.window >= 7 * 86400 && (!m || l.window > m.window) ? l : m), null);
   let pace = '';
-  if (week?.resets_at && week.window) {
-    const elapsed = 1 - (week.resets_at - Date.now() / 1000) / week.window;
-    const day = new Date(week.resets_at * 1000).toLocaleDateString(LOCALE, { weekday: 'long' });
-    pace = week.used <= elapsed * 100 + 5
+  if (long?.resets_at && long.window) {
+    const elapsed = 1 - (long.resets_at - Date.now() / 1000) / long.window;
+    const day = new Date(long.resets_at * 1000).toLocaleDateString(LOCALE, long.window > 8 * 86400 ? { day: 'numeric', month: 'long' } : { weekday: 'long' });
+    pace = long.used <= elapsed * 100 + 5
       ? `<p class="upace ok">${ic('check', 16, 2)}${t('Dans les temps jusqu’à {day}.', { day: esc(day) })}</p>`
       : `<p class="upace warn">${ic('clock', 16, 2)}${t('Plus rapide que le rythme : limite atteinte avant {day}.', { day: esc(day) })}</p>`;
   }
-  const busy = u.sessions.filter((x) => x.used != null);
-  box.innerHTML = (u.limits.length ? u.limits.map((l) => usageBar(l.label, l.used, resetText(l.resets_at))).join('') + pace
-    : `<span class="small muted">${t('Pas encore de chiffres : ils arrivent avec la prochaine lecture.')}</span>`)
+  const busy = (u.sessions || []).filter((x) => x.used != null);
+  box.innerHTML = (u.plan ? `<span class="small muted">${t('Forfait {plan}', { plan: esc(u.plan.charAt(0).toUpperCase() + u.plan.slice(1)) })}</span>` : '')
+    + (u.limits.length ? u.limits.map((l) => usageBar(l.label, l.used, resetText(l.resets_at))).join('') + pace
+      : `<span class="small muted">${a === 'codex' ? t('Pas encore de chiffres : Codex les donne à chaque échange.') : t('Pas encore de chiffres : ils arrivent avec la prochaine lecture.')}</span>`)
     + (busy.length ? `<span class="ulabel" style="margin-top:4px">${t('Contexte des sessions ouvertes')}</span>${busy.map((x) => usageBar(x.project || t('Session'), x.used, x.tokens != null ? t('{used} sur {size} jetons', { used: fmtTok(x.tokens), size: fmtTok(x.size) }) : '', x.used >= 70 ? 'warn' : 'amber')).join('')}` : '');
   $('.cpop-upd', pop).textContent = u.refreshing ? t('Actualisation…') : u.updated ? t('Mis à jour {ago}', { ago: ago(u.updated) }) : '';
 }
 document.addEventListener('click', (e) => {
-  const chip = e.target.closest?.('#claude-chip');
+  const chip = e.target.closest?.('[data-usage]');
   if (!chip) return;
-  const pop = popover(chip, `<div class="cpop" role="dialog" aria-label="${t('Utilisation de Claude')}">
-    <div class="cpop-head"><img src="/logos/claude.svg" alt="" width="20" height="20"><b>${t('Utilisation de Claude')}</b><span class="cpop-upd small muted"></span></div>
+  const a = chip.dataset.usage;
+  const pop = popover(chip, `<div class="cpop" role="dialog" aria-label="${usageTitle(a)}">
+    <div class="cpop-head">${agentLogo(a, 20)}<b>${usageTitle(a)}</b><span class="cpop-upd small muted"></span></div>
     <div class="cpop-body stack"></div></div>`);
   if (!pop) return;
-  drawClaudePop(pop);
-  loadClaudeChip();
+  drawUsagePop(pop, a);
+  loadUsageChip(a);
 });
 let lastBadge = null;
 function setBadge(n) {
@@ -689,7 +757,7 @@ function onLiveGlobal(st) {
   const nses = st.sessions.length + (st.repos || []).filter((r) => r.claude).length;
   if (c) { c.hidden = !nses; c.textContent = nses; }
   const attention = st.sessions.filter((s) => s.phase === 'question' || s.phase === 'exited');
-  setBadge(attention.length);
+  setBadge(attention.length + (st.repos || []).filter((r) => r.agent === 'codex' && r.claude && r.status === 'waiting').length);
   const cur = { s: Object.fromEntries(st.sessions.map((s) => [s.slug, s])), t: Object.fromEntries(st.tasks.map((t) => [t.id, t])), r: Object.fromEntries((st.repos || []).map((r) => [r.key || r.slug, r])) };
   if (livePrev) {
     for (const s of st.sessions) {
@@ -706,10 +774,16 @@ function onLiveGlobal(st) {
     }
     for (const r of st.repos || []) {
       const b = livePrev.r?.[r.key || r.slug];
+      const hash = claudeHash(r.slug, r.branch, r.agent);
+      const who = agentShort(r.agent);
       if (b && b.status === 'busy' && r.status === 'idle' && r.claude) {
-        const hash = claudeHash(r.slug, r.branch, r.agent);
-        if (!location.hash.startsWith(hash)) toast(t('{name} : Claude a terminé', { name: r.name }), false, { label: t('Voir'), run: () => { location.hash = hash; } });
-        browserNotify(t('{name} : Claude a terminé', { name: r.name }), t('Claude attend la suite.'), hash);
+        if (!location.hash.startsWith(hash)) toast(t('{name} : {agent} a terminé', { name: r.name, agent: who }), false, { label: t('Voir'), run: () => { location.hash = hash; } });
+        browserNotify(t('{name} : {agent} a terminé', { name: r.name, agent: who }), t('{agent} attend la suite.', { agent: who }), hash);
+      }
+      // Codex attend une validation (commande, modification, confiance dans le dossier) : réponse dans son terminal
+      if (r.agent === 'codex' && r.claude && r.status === 'waiting' && (!b || b.status !== 'waiting' || b.question !== r.question)) {
+        if (!location.hash.startsWith(hash)) toast(`${t('{name} : Codex attend ta validation', { name: r.name })}${r.question ? `\n${r.question}` : ''}`, false, { label: t('Voir'), run: () => { location.hash = hash; } });
+        browserNotify(t('{name} : Codex attend ta validation', { name: r.name }), r.question || t('Validation demandée'), hash);
       }
     }
     for (const tk of st.tasks) {
@@ -871,7 +945,7 @@ function startDialog(name, mode, canWorktree = false, opts = {}) {
   return new Promise((resolve) => {
     const d = document.createElement('dialog');
     d.className = 'startdlg';
-    const choices = opts.open ? availableAgents() : [];
+    const choices = opts.open && !opts.lock ? availableAgents() : [];
     let agent = opts.open ? agentId(opts.agent) : 'claude';
     if (choices.length && !choices.includes(agent)) agent = choices[0];
     const modeFor = (a) => (a === 'claude' ? mode : (agentDef(a)?.default_mode || 'auto'));
@@ -926,9 +1000,9 @@ async function withTrust(call) {
   }
 }
 // Ouvre un agent (Claude par défaut, ou `agent`) dans le terminal tmux d'un projet, après le dialogue de lancement
-async function launchClaude(slug, name, agent = 'claude') {
+async function launchClaude(slug, name, agent = 'claude', lock = false) {
   await loadAgents();
-  const r = await startDialog(name || slug, await defaultMode(), false, { open: true, agent, cont: contPref() });
+  const r = await startDialog(name || slug, await defaultMode(), false, { open: true, agent, lock, cont: contPref() });
   if (!r) return false;
   try {
     await api('POST', `/api/projects/${enc(slug)}/claude/repo/open${brQ(null, r.agent)}`, { mode: r.mode, continue: r.cont, rc: r.rc });
@@ -973,13 +1047,14 @@ async function openPalette() {
       const h = `#/projets/${enc(p.slug)}`;
       const name = p.name;
       out.push({ label: name, hint: t('Projet'), icon: 'folder', run: go(h), base: true });
-      out.push(p.claude.running
-        ? { label: t('Session Claude · {name}', { name }), hint: 'Claude', icon: 'spark', run: go(`${h}/claude`) }
-        : { label: t('Lancer Claude sur {name}', { name }), hint: 'Claude', icon: 'spark', run: () => launchClaude(p.slug, name, 'claude') });
-      if (codexSessionOf(p.slug)) out.push({ label: t('Session Codex · {name}', { name }), hint: 'Codex', icon: 'term', run: go(claudeHash(p.slug, null, 'codex')) });
-      else if (codexOn()) out.push({ label: t('Lancer Codex sur {name}', { name }), hint: 'Codex', icon: 'term', run: () => launchClaude(p.slug, name, 'codex') });
+      // Une entrée par IA installée (ou déjà ouverte) : sa session, sinon son lancement
+      const open = agentReposOf(p.slug).filter((r) => !r.branch).map((r) => r.agent);
+      if (p.claude.running || open.includes('claude')) out.push({ label: t('Session Claude · {name}', { name }), hint: 'Claude', icon: 'spark', run: go(open.includes('claude') ? claudeHash(p.slug, null, 'claude') : `${h}/claude`) });
+      else if (claudeOn()) out.push({ label: t('Lancer Claude sur {name}', { name }), hint: 'Claude', icon: 'spark', run: () => launchClaude(p.slug, name, 'claude', true) });
+      if (open.includes('codex')) out.push({ label: t('Session Codex · {name}', { name }), hint: 'Codex', icon: 'term', run: go(claudeHash(p.slug, null, 'codex')) });
+      else if (codexOn()) out.push({ label: t('Lancer Codex sur {name}', { name }), hint: 'Codex', icon: 'term', run: () => launchClaude(p.slug, name, 'codex', true) });
       out.push({ label: t('Fichiers de {name}', { name }), hint: t('Fichiers'), icon: 'file', run: go(`${h}/fichiers`) });
-      out.push({ label: t('Confier une tâche à Claude · {name}', { name }), hint: 'Claude', icon: 'task', run: go(`${h}/claude`) });
+      out.push({ label: t('Confier une tâche à une IA · {name}', { name }), hint: aiAgents().map(agentShort).join(' / '), icon: 'task', run: go(`${h}/claude`) });
       if (p.app_id) out.push({ label: t('Logs et variables de {name}', { name }), hint: DEPLOY.name, icon: 'upload', run: go(`${h}/deploiement`) });
       if (p.git?.changes) out.push({ label: t('Valider les modifications de {name}', { name }), hint: 'Git', icon: 'branch', run: go(`${h}/git`) });
       if (p.app_id) out.push({ label: t('Déployer {name}', { name }), hint: DEPLOY.name, icon: 'upload', run: () => deployApp(p.app_id, name) });
@@ -1022,7 +1097,7 @@ document.addEventListener('keydown', (e) => {
 const GO = { a: '#/', p: '#/projets', s: '#/sessions', t: '#/terminal', d: '#/deploiements', v: '#/serveur', r: '#/parametres' };
 const SHORTCUTS = [
   ['Ctrl K', t('Rechercher, aller n’importe où, lancer une action')],
-  [t('g puis a / p / s / t'), t('Accueil, Projets, Sessions Claude, Terminal')],
+  [t('g puis a / p / s / t'), t('Accueil, Projets, Sessions IA, Terminal')],
   [t('g puis d / v / r'), t('Déploiements, Serveur, Paramètres')],
   [t('1 à 6'), t('Onglets d’un projet (Aperçu, Fichiers, Git, Agents, Déploiement, Réglages)')],
   ['Ctrl P', t('Ouvrir un fichier du projet par son nom')],
@@ -1124,7 +1199,7 @@ async function openTask(id) {
         <div class="tresult ${tk.result.error ? 'err' : ''}">${tk.result.error ? `<b class="c-err">${t('Échec')}</b>` : ''}<div class="md">${resultHtml}</div></div>
         <span class="small muted">${codex ? tp(tk.result.turns || 0, '{n} échange avec Codex', '{n} échanges avec Codex') : tp(tk.result.turns || 0, '{n} échange avec Claude', '{n} échanges avec Claude')} · ${fmtDur(tk.result.duration || 0)}</span>
       </div>`}
-      ${report ? `<div class="tapprove" title="${t('Claude supprime ce qui est sûr dans cette liste. Les fichiers suivis par Git restent récupérables ; rien n’est validé ni poussé.')}">
+      ${report ? `<div class="tapprove" title="${t('{agent} supprime ce qui est sûr dans cette liste. Les fichiers suivis par Git restent récupérables ; rien n’est validé ni poussé.', { agent: codex ? 'Codex' : 'Claude' })}">
         <span class="tq">${ic('broom', 18, 2)}<b>${t('Nettoyer selon ce rapport ?')}</b></span>
         <label class="tnote"><span class="sr">${t('Précisions')}</span><input id="clean-note" maxlength="500" placeholder="${t('Précisions (facultatif) : garde le dossier docs/…')}"></label>
         <span class="row nowrap" style="gap:6px"><button class="btn sm ghost" data-x="close">${t('Ignorer')}</button><button class="btn sm primary" data-x="approve">${ic('check', 16, 2)}${t('Valider et nettoyer')}</button></span>
@@ -1275,7 +1350,9 @@ function sessionRows(sessions) {
 }
 
 /* Sessions « dépôt » : Claude interactif dans le tmux qui porte le nom du dossier */
-const repoStatus = (r) => (r.agent === 'codex' ? (r.claude ? { short: t('Codex actif dans le terminal'), cls: 'ok', lead: 'ok' } : { short: t('Shell · Codex arrêté'), cls: 'warn', lead: '' })
+const repoStatus = (r) => (r.agent === 'codex' ? (!r.claude ? { short: t('Shell · Codex arrêté'), cls: 'warn', lead: '' }
+  : r.status === 'waiting' ? { short: t('Codex attend ta validation'), cls: 'warn', lead: 'warn' }
+    : r.status === 'busy' ? { short: t('Codex travaille'), cls: 'ok', lead: 'ok' } : { short: t('Codex actif dans le terminal'), cls: 'ok', lead: 'ok' })
   : !r.claude ? { short: t('Shell · Claude arrêté'), cls: 'warn', lead: '' }
     : r.rc ? { short: t('Remote Control actif'), cls: 'ok', lead: 'ok' } : { short: t('Claude actif dans le terminal'), cls: 'ok', lead: 'ok' });
 // Session tmux d'une branche en parallèle : ?branch=x côté API, ?branche=x dans l'adresse de la page.
@@ -1319,7 +1396,7 @@ function statusIcons(p) {
   const st = sessionStatus(p.claude);
   const d = deployStatus(p.app);
   return `<span class="icons">
-    ${p.claude.running ? `<span class="mini ${st.cls}" title="${t('Claude : {status}', { status: esc(st.short) })}">${esc(st.short)}</span>` : ''}
+    ${p.claude.running ? `<span class="mini ${st.cls}" title="${t('Claude : {status}', { status: esc(st.short) })}">${esc(st.short)}</span>` : ''}${agentMinis(p.slug)}
     ${p.git?.changes ? `<span class="mini accent" title="${tp(p.git.changes, '{n} fichier non validé', '{n} fichiers non validés')}">${ic('branch', 14, 2)}${p.git.changes}</span>` : ''}
     ${p.app ? `<span class="mini ${d.dot}" title="${t('{tool} : {status}', { tool: DN(), status: esc(d.short) })}">${esc(d.short)}</span>` : ''}
   </span>`;
@@ -1380,6 +1457,12 @@ async function viewDashboard(main) {
     const s = overview?.stats;
     if (s && s.disk_used / s.disk_total > 0.9) out.push({ lvl: 'err', icon: 'server', title: t('Disque presque plein'), text: t('{pct} utilisés', { pct: fmtPct((100 * s.disk_used) / s.disk_total) }), acts: '' });
     if (s && s.mem_used / s.mem_total > 0.9) out.push({ lvl: 'err', icon: 'server', title: t('Mémoire presque pleine'), text: t('{pct} utilisés', { pct: fmtPct((100 * s.mem_used) / s.mem_total) }), acts: '' });
+    for (const r of liveState()?.repos || []) {
+      if (r.agent === 'codex' && r.claude && r.status === 'waiting') {
+        out.push({ lvl: 'question', icon: 'spark', title: t('{name} · Codex attend ta validation', { name: r.name }), text: r.question || t('Validation demandée'),
+          acts: `<a class="btn primary" href="${claudeHash(r.slug, r.branch, 'codex')}">${t('Répondre')}</a>` });
+      }
+    }
     for (const p of projects || []) {
       const c = p.claude, a = `data-slug="${esc(p.slug)}"`, h = `#/projets/${enc(p.slug)}`;
       if (c.running && c.phase === 'question') {
@@ -1423,7 +1506,7 @@ async function viewDashboard(main) {
     if (!$('#tasks')) return;
     setHTML($('#tfilters'), TFILTERS.map(([id, l]) => `<button type="button" class="chip sm" data-act="t-filter" data-f="${id}" aria-pressed="${id === taskFilter}">${l}</button>`).join(''));
     const list = tasks.filter((t) => taskFilter === 'all' || t.status === taskFilter);
-    setHTML($('#tasks'), taskRows(list, { project: true, actions: true }) || `<div class="empty small">${tasks.length ? t('Aucune tâche dans ce filtre.') : t('Aucune tâche. Confie-en une depuis l’onglet Claude d’un projet.')}</div>`);
+    setHTML($('#tasks'), taskRows(list, { project: true, actions: true }) || `<div class="empty small">${tasks.length ? t('Aucune tâche dans ce filtre.') : t('Aucune tâche. Confie-en une depuis l’onglet Agents d’un projet.')}</div>`);
   };
   const loadTasks = async () => { try { tasks = await api('GET', '/api/tasks?limit=40'); drawTasks(); } catch (_) { /* rien */ } };
   const onTasksChanged = () => loadTasks();
@@ -1483,7 +1566,7 @@ async function deleteProject(p, after) {
   const linked = [p.remote || p.git ? t('son dépôt distant (GitHub…)') : '', p.app_id ? t('son application {tool}', { tool: DEPLOY.name }) : ''].filter(Boolean);
   const list = linked.join(` ${t('et')} `);
   const ok = await confirmBox(t('Supprimer le projet {name} ?', { name: p.name }),
-    t('Le dossier {path} part dans la corbeille de Helmshell, restaurable 30 jours (page Serveur). Les sessions Claude et les terminaux du projet sont fermés.', { path: p.path || p.slug })
+    t('Le dossier {path} part dans la corbeille de Helmshell, restaurable 30 jours (page Serveur). Les sessions d’IA et les terminaux du projet sont fermés.', { path: p.path || p.slug })
     + (linked.length ? ` ${tp(linked.length, 'Rien n’est supprimé ailleurs : {list} n’est pas touché.', 'Rien n’est supprimé ailleurs : {list} ne sont pas touchés.', { list })}` : ''),
     t('Mettre à la corbeille'));
   if (!ok) return;
@@ -1496,8 +1579,9 @@ async function deleteProject(p, after) {
   } catch (e) { fail(e); }
 }
 
-/* Nettoyer un projet : tâche de fond confiée à Claude (il sait ce qui sert encore, contrairement à un script).
-   Par défaut un rapport seulement ; sinon Claude supprime ce qui est sûr et laisse les changements à valider. */
+/* Nettoyer un projet : tâche de fond confiée à une IA, Claude Code ou Codex (elle sait ce qui sert encore,
+   contrairement à un script). Par défaut un rapport seulement ; sinon elle supprime ce qui est sûr et laisse les
+   changements à valider. */
 const CLEAN_REPORT_FR = `Fais l'inventaire de ce qui ne sert plus dans ce projet, sans rien modifier ni supprimer :
 fichiers et dossiers générés (builds, caches, journaux, dépendances installées), fichiers temporaires ou de sauvegarde,
 doublons, ressources et code jamais utilisés, anciens scripts, dépendances déclarées mais inutilisées.
@@ -1511,7 +1595,7 @@ Règles :
 - Pour les fichiers suivis par Git, utilise git rm : la suppression reste visible et annulable. Ne fais aucun commit.
 - Dans le doute, garde le fichier et cite-le dans le rapport.
 Réponds en français : ce que tu as supprimé (avec la place libérée), puis ce que tu as gardé par prudence.`;
-// Mêmes consignes en anglais (interface en anglais : Claude répond en anglais)
+// Mêmes consignes en anglais (interface en anglais : l'IA répond en anglais)
 const CLEAN_REPORT_EN = `Take stock of what is no longer needed in this project, without modifying or deleting anything:
 generated files and folders (builds, caches, logs, installed dependencies), temporary or backup files,
 duplicates, assets and code that are never used, old scripts, dependencies that are declared but unused.
@@ -1537,24 +1621,46 @@ const startsAny = (s, list) => !!s && list.some((x) => s.startsWith(x.slice(0, 4
 const taskKind = (tk) => tk.kind || (startsAny(tk.prompt, [CLEAN_REPORT_FR, CLEAN_REPORT_EN]) ? 'clean-report' : startsAny(tk.prompt, [CLEAN_DO_FR, CLEAN_DO_EN]) ? 'clean' : '');
 const fmtDur = (s) => (s < 90 ? t('{n} s', { n: Math.round(s) }) : s < 5400 ? t('{n} min', { n: Math.round(s / 60) }) : fmtHM(s));
 async function cleanProject(p) {
+  await loadAgents();
+  const list = aiAgents();
+  let agent = list.includes(agentsInfo?.default_agent) ? agentsInfo.default_agent : list[0];
   const d = document.createElement('dialog');
+  // Textes selon l'IA choisie (Claude Code ou Codex), qui fait le tri
+  const texts = (a) => {
+    const v = { agent: agentShort(a) };
+    return [t('{agent} parcourt le projet en tâche de fond pour repérer ce qui ne sert plus : builds, caches, fichiers temporaires, code ou ressources inutilisés. Tu es prévenu à la fin.', v),
+      t('{agent} liste ce qui peut partir, sans rien supprimer.', v),
+      t('{agent} supprime ce qui est sûr. Les fichiers suivis par Git restent récupérables, rien n’est validé ni poussé.', v)];
+  };
+  const [intro, rep, del] = texts(agent);
   d.innerHTML = `<form method="dialog">
     <h2 class="row" style="gap:10px">${ic('broom', 24, 2)}${t('Nettoyer {name}', { name: esc(p.name) })}</h2>
-    <p class="muted small" style="margin:0">${t('Claude parcourt le projet en tâche de fond pour repérer ce qui ne sert plus : builds, caches, fichiers temporaires, code ou ressources inutilisés. Tu es prévenu à la fin.')}</p>
-    <label class="rc-opt"><input type="radio" name="how" value="report" checked><span class="grow"><b>${t('Rapport seulement')}</b><small>${t('Claude liste ce qui peut partir, sans rien supprimer.')}</small></span></label>
-    <label class="rc-opt"><input type="radio" name="how" value="do"><span class="grow"><b>${t('Nettoyer')}</b><small>${t('Claude supprime ce qui est sûr. Les fichiers suivis par Git restent récupérables, rien n’est validé ni poussé.')}</small></span></label>
+    ${list.length > 1 ? `<div class="seg sm cl-agents" role="group" aria-label="${t('IA')}" style="align-self:flex-start">${list.map((a) => `<button type="button" class="ico" data-agent="${a}" aria-pressed="${a === agent}">${agentLogo(a, 18)}${AGENT_LABELS[a]}</button>`).join('')}</div>` : ''}
+    <p class="muted small cl-t0" style="margin:0">${intro}</p>
+    <label class="rc-opt"><input type="radio" name="how" value="report" checked><span class="grow"><b>${t('Rapport seulement')}</b><small class="cl-t1">${rep}</small></span></label>
+    <label class="rc-opt"><input type="radio" name="how" value="do"><span class="grow"><b>${t('Nettoyer')}</b><small class="cl-t2">${del}</small></span></label>
     <div class="row" style="justify-content:flex-end">
       <button type="button" class="btn ghost" data-close>${t('Annuler')}</button>
       <button class="btn primary" value="ok">${ic('broom', 18, 2)}${t('Lancer')}</button>
     </div></form>`;
   document.body.append(d);
   $('[data-close]', d).onclick = () => d.close('cancel');
+  const seg = $('.cl-agents', d);
+  if (seg) seg.onclick = (e) => {
+    const b = e.target.closest('[data-agent]');
+    if (!b) return;
+    agent = b.dataset.agent;
+    for (const x of $$('[data-agent]', seg)) x.setAttribute('aria-pressed', String(x === b));
+    texts(agent).forEach((txt, i) => { $(`.cl-t${i}`, d).textContent = txt; });
+  };
   const ok = await new Promise((res) => { d.addEventListener('close', () => res(d.returnValue === 'ok')); d.showModal(); });
   const how = $('input[name=how]:checked', d).value;
   d.remove();
   if (!ok) return;
   try {
-    await withTrust((trust) => api('POST', `/api/projects/${enc(p.slug)}/tasks`, how === 'do' ? { prompt: CLEAN_DO, mode: 'auto', kind: 'clean', trust } : { prompt: CLEAN_REPORT, mode: 'plan', kind: 'clean-report', trust }));
+    // Inventaire sans rien modifier : plan d'abord (Claude), lecture seule (Codex) ; nettoyage : mode automatique
+    const reportMode = agent === 'codex' ? 'read-only' : 'plan';
+    await withTrust((trust) => api('POST', `/api/projects/${enc(p.slug)}/tasks`, how === 'do' ? { prompt: CLEAN_DO, mode: 'auto', kind: 'clean', trust, agent } : { prompt: CLEAN_REPORT, mode: reportMode, kind: 'clean-report', trust, agent }));
     toast(how === 'do' ? t('Nettoyage de {name} lancé', { name: p.name }) : t('Inventaire de {name} lancé', { name: p.name }), false, { label: t('Voir'), run: () => { location.hash = `#/projets/${enc(p.slug)}/claude`; } });
   } catch (e) { fail(e); }
 }
@@ -1563,10 +1669,8 @@ function projectMenu(anchor, p, reload) {
   const h = `#/projets/${enc(p.slug)}`;
   menu(anchor, [
     { label: t('Ouvrir'), icon: 'folderOpen', run: () => { location.hash = h; } },
-    p.claude.running
-      ? { label: t('Voir la session Claude'), icon: 'spark', run: () => { location.hash = `${h}/claude`; } }
-      : { label: t('Lancer Claude'), icon: 'spark', run: () => launchClaude(p.slug, p.name, 'claude') },
-    codexOn() ? { label: t('Lancer Codex'), icon: 'term', run: () => launchClaude(p.slug, p.name, 'codex') } : null,
+    { label: openAiLabel(), icon: 'spark', run: () => openAi(p.slug, p.name) },
+    p.claude.running ? { label: t('Voir la session Claude en arrière-plan'), icon: 'eye', run: () => { location.hash = `${h}/claude`; } } : null,
     { label: t('Fichiers'), icon: 'file', run: () => { location.hash = `${h}/fichiers`; } },
     p.git ? { label: 'Git', icon: 'branch', run: () => { location.hash = `${h}/git`; } } : null,
     p.app_id ? { label: t('Déployer sur {tool}', { tool: DEPLOY.name }), icon: 'upload', run: () => deployApp(p.app_id, p.name).then(reload) } : null,
@@ -1630,7 +1734,7 @@ async function viewProjects(main) {
     setHTML($('#plist'), `<div class="card" style="overflow:hidden"><div class="scrollx"><table class="table ptable">
       <thead><tr>
         <th aria-sort="${sortAttr('name')}"><button class="th" data-act="sort" data-k="name">${t('Nom')}${arrow('name')}</button></th>
-        <th class="hide-sm">${t('Plateformes')}</th><th class="hide-sm">${t('Technos')}</th><th>Claude</th><th class="hide-sm">Git</th>${DEPLOY.provider ? `<th class="hide-sm">${t('Déploiement')}</th>` : ''}
+        <th class="hide-sm">${t('Plateformes')}</th><th class="hide-sm">${t('Technos')}</th><th>${t('IA')}</th><th class="hide-sm">Git</th>${DEPLOY.provider ? `<th class="hide-sm">${t('Déploiement')}</th>` : ''}
         <th aria-sort="${sortAttr('recent')}"><button class="th" data-act="sort" data-k="recent">${t('Modifié')}${arrow('recent')}</button></th>
         <th class="hide-sm" aria-sort="${sortAttr('size')}"><button class="th" data-act="sort" data-k="size">${t('Taille')}${arrow('size')}</button></th>
         <th><span class="sr">${t('Actions')}</span></th>
@@ -1641,7 +1745,7 @@ async function viewProjects(main) {
           <td><span class="row nowrap" style="gap:12px">${projectIcon(p)}<span class="stack" style="gap:2px;min-width:0"><a class="plain" href="#/projets/${enc(p.slug)}" title="${esc(p.path)}"><b>${esc(p.name)}</b></a>${p.description ? `<span class="small muted ellipsis pdesc">${esc(p.description)}</span>` : ''}</span></span></td>
           <td class="hide-sm"><span class="plats">${platformBadges(p.platforms || [])}</span></td>
           <td class="hide-sm"><span class="row nowrap techs" style="gap:4px">${techBadges(p.tags, 5)}</span></td>
-          <td>${p.claude.running ? `<span class="pill ${st.dot}">${esc(st.short)}</span>` : '<span class="muted">—</span>'}</td>
+          <td>${p.claude.running || agentMinis(p.slug) ? `<span class="row nowrap" style="gap:4px">${p.claude.running ? `<span class="pill ${st.dot}">${esc(st.short)}</span>` : ''}${agentMinis(p.slug)}</span>` : '<span class="muted">—</span>'}</td>
           <td class="hide-sm nowrap">${g ? `<span class="mono small">${esc(g.branch)}</span>${g.changes ? ` <span class="pill accent-soft">${g.changes}</span>` : ` <span class="c-ok">${ic('check', 16, 2.4)}</span>`}` : '<span class="muted">—</span>'}</td>
           ${DEPLOY.provider ? `<td class="hide-sm">${p.app ? `<span class="pill ${d.dot}">${esc(d.short)}</span>` : '<span class="muted">—</span>'}</td>` : ''}
           <td class="small muted nowrap">${ago(p.last_activity)}</td>
@@ -1792,12 +1896,13 @@ async function viewProject(main, slug, tab, query) {
     agent: qAgent ? agentId(qAgent) : agentPref(slug),
   };
   if (qAgent) setAgentPref(slug, S.agent);
-  // Codex choisi mais ni installé ni ouvert dans ce projet : retour à Claude
+  // IA choisie mais ni installée ni ouverte dans ce projet : l'autre (Claude si Codex manque, et inversement)
   if (S.agent === 'codex' && !codexOn() && !codexSessionOf(slug)) S.agent = 'claude';
+  if (S.agent === 'claude' && !claudeOn() && codexOn() && !agentReposOf(slug).some((r) => r.agent === 'claude')) S.agent = 'codex';
   const BQ = () => brQ(S.br, S.agent);
   const isCodex = () => S.agent === 'codex';
-  // Le choix Claude Code | Codex n'apparaît que si Codex est installé ou déjà ouvert dans ce projet
-  const showAgentSwitch = () => codexOn() || codexSessionOf(slug) || isCodex();
+  // Le choix Claude Code | Codex n'apparaît que si les deux sont installés (ou l'autre déjà ouvert dans ce projet)
+  const showAgentSwitch = () => aiAgents().length > 1 || agentReposOf(slug).some((r) => r.agent !== S.agent);
   const info = S.info;
   onLeave(() => { S.left = true; S.termGen++; if (S.disposeTerm) S.disposeTerm(); S.repoGen++; if (S.disposeRepo) S.disposeRepo(); });
 
@@ -1854,22 +1959,39 @@ async function viewProject(main, slug, tab, query) {
     const d = info.app ? deployStatus(info.app) : null;
     const r = S.repo;
     drawClaudeBtn();
+    // Une pastille par IA ouverte (terminal du dossier principal), plus la session Claude en arrière-plan
+    const open = agentReposOf(slug).filter((x) => !x.branch);
+    if (r?.claude && !r.branch && !open.some((x) => x.agent === r.agent)) open.push(r);
+    const aiPills = open.map((x) => { const xs = repoStatus(x); return `<button class="pill ${xs.cls === 'warn' ? 'warn' : 'ok'}" data-act="agent-pick" data-agent="${agentId(x.agent)}" title="${esc(xs.short)}">${agentLogo(x.agent, 14)}${agentShort(x.agent)} · ${x.rc ? 'Remote Control' : x.status === 'waiting' ? t('validation') : x.status === 'busy' ? t('travaille') : t('terminal')}</button>`; });
     $('#pills').innerHTML = [
-      c?.running ? `<button class="pill ${st.dot}" data-act="tab" data-tab="claude"><span class="dot"></span>Claude · ${esc(st.short)}</button>`
-        : r?.claude ? `<button class="pill ok" data-act="tab" data-tab="claude"><span class="dot"></span>${agentShort(r.agent)} · ${r.rc ? 'Remote Control' : t('terminal')}</button>`
-          : `<button class="pill" data-act="tab" data-tab="claude"><span class="dot"></span>${isCodex() ? t('Codex arrêté') : t('Claude arrêté')}</button>`,
+      c?.running ? `<button class="pill ${st.dot}" data-act="tab" data-tab="claude"><span class="dot"></span>Claude · ${esc(st.short)}</button>` : '',
+      ...aiPills,
+      !c?.running && !aiPills.length ? `<button class="pill" data-act="tab" data-tab="claude"><span class="dot"></span>${aiAgents().length > 1 ? t('Aucune IA ouverte') : aiAgents()[0] === 'codex' ? t('Codex arrêté') : t('Claude arrêté')}</button>` : '',
       g ? `<button class="pill ${g.n ? 'accent-soft' : ''}" data-act="tab" data-tab="git">${ic('branch', 13, 2)}<span class="mono">${esc(g.branch)}</span>${g.n ? ` · ${tp(g.n, '{n} modifié', '{n} modifiés')}` : ''}</button>` : `<span class="pill">${t('Pas de dépôt Git')}</span>`,
       g ? (remotePill() || `<button class="pill" data-act="link-remote">${t('Pas de dépôt distant · relier')}</button>`) : '',
       d ? `<span class="pill ${d.dot === 'ok' ? 'ok' : d.dot}"><span class="dot ${d.dot}"></span>${esc(d.short)} · ${DN()}</span>` : '',
     ].join('');
   }
+  // Bouton d'ouverture : « Ouvrir Claude » ou « Ouvrir Codex » quand une seule IA est installée,
+  // « Ouvrir IA » (avec la fenêtre de choix) quand les deux le sont
   function drawClaudeBtn() {
     const box = $('#claude-btn');
     if (!box) return;
-    const codex = isCodex();
-    const on = S.repo?.claude || (!codex && S.claude?.running);
-    const tip = codex ? (on ? t('Codex tourne dans ce projet') : t('Ouvre Codex dans un terminal tmux')) : (on ? t('Claude tourne dans ce projet') : t('Ouvre Claude dans un terminal tmux'));
-    setHTML(box, `<button class="btn ${on ? 'tonal' : 'primary'} claude-btn" data-act="claude-open" title="${tip}">${agentLogo(S.agent, 18)}${on ? `${agentShort(S.agent)}<span class="dot ok"></span>` : codex ? t('Ouvrir Codex') : t('Ouvrir Claude')}</button><button class="btn ${on ? 'tonal' : 'primary'} caret" data-act="claude-menu" aria-haspopup="menu" aria-label="${showAgentSwitch() ? t('Autres façons de lancer un agent') : t('Autres façons de lancer Claude')}">${ic('chevronDown', 18, 2)}</button>`);
+    const list = aiAgents();
+    const open = agentReposOf(slug).filter((x) => !x.branch).map((x) => agentId(x.agent));
+    if (S.repo?.claude && !S.repo.branch && !open.includes(S.agent)) open.push(S.agent);
+    if (S.claude?.running && !open.includes('claude')) open.push('claude');
+    const on = open.length > 0;
+    let html;
+    if (list.length > 1) {
+      const tip = on ? t('IA ouvertes : {list}', { list: open.map(agentShort).join(', ') }) : t('Choisis Claude Code ou Codex, puis ouvre-le dans un terminal tmux');
+      html = `<button class="btn ${on ? 'tonal' : 'primary'} claude-btn" data-act="claude-open" title="${esc(tip)}">${on ? open.map((a) => agentLogo(a, 18)).join('') : ic('spark', 18, 2)}${on ? `${t('IA')}<span class="dot ok"></span>` : t('Ouvrir IA')}</button>`;
+    } else {
+      const a = list[0], me = open.includes(a);
+      const tip = a === 'codex' ? (me ? t('Codex tourne dans ce projet') : t('Ouvre Codex dans un terminal tmux')) : (me ? t('Claude tourne dans ce projet') : t('Ouvre Claude dans un terminal tmux'));
+      html = `<button class="btn ${me ? 'tonal' : 'primary'} claude-btn" data-act="claude-open" title="${tip}">${agentLogo(a, 18)}${me ? `${agentShort(a)}<span class="dot ok"></span>` : openAiLabel(list)}</button>`;
+    }
+    setHTML(box, `${html}<button class="btn ${on ? 'tonal' : 'primary'} caret" data-act="claude-menu" aria-haspopup="menu" aria-label="${list.length > 1 ? t('Autres façons de lancer une IA') : list[0] === 'codex' ? t('Autres façons de lancer Codex') : t('Autres façons de lancer Claude')}">${ic('chevronDown', 18, 2)}</button>`);
   }
   function drawSbar() {
     if (S.left || !$('#sbar')) return;
@@ -1898,7 +2020,7 @@ async function viewProject(main, slug, tab, query) {
     if (S.left || !$('#tabs')) return;
     const g = gitSum();
     // Icône (affichée sur mobile, au-dessus du libellé) + pastille : modifications Git, Claude ouvert
-    $('#tabs').innerHTML = TABS.filter(([id]) => id !== 'deploiement' || DEPLOY.provider).map(([id, l, icon]) => `<button type="button" role="tab" data-act="tab" data-tab="${id}" aria-selected="${id === S.tab}"><span class="ti">${ic(icon, 22, 2)}${id === 'git' && g?.n ? `<span class="badge">${g.n}</span>` : ''}${id === 'claude' && (S.claude?.running || S.repo?.claude) ? `<span class="dot ${S.claude?.running ? sessionStatus(S.claude).dot : 'ok'}"></span>` : ''}</span><span class="tl">${l()}</span></button>`).join('');
+    $('#tabs').innerHTML = TABS.filter(([id]) => id !== 'deploiement' || DEPLOY.provider).map(([id, l, icon]) => `<button type="button" role="tab" data-act="tab" data-tab="${id}" aria-selected="${id === S.tab}"><span class="ti">${ic(icon, 22, 2)}${id === 'git' && g?.n ? `<span class="badge">${g.n}</span>` : ''}${id === 'claude' && (S.claude?.running || S.repo?.claude || agentReposOf(slug).length) ? `<span class="dot ${S.claude?.running ? sessionStatus(S.claude).dot : agentReposOf(slug).some((x) => x.status === 'waiting') ? 'warn' : 'ok'}"></span>` : ''}</span><span class="tl">${l()}</span></button>`).join('');
     // Sur un écran étroit, l'onglet actif reste visible si la barre défile
     const cur = $('#tabs [aria-selected="true"]');
     if (cur && $('#tabs').scrollWidth > $('#tabs').clientWidth) cur.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -2088,7 +2210,7 @@ async function viewProject(main, slug, tab, query) {
     } else if (PDF_EXT.includes(ext)) {
       pane.innerHTML = head(meta) + `<iframe class="pdf" title="${esc(S.sel)}" src="${url}"></iframe>`;
     } else if (f.binary) {
-      pane.innerHTML = `${head(meta)}<div class="empty">${t('Fichier binaire : pas d’aperçu. Télécharge-le ou demande à Claude.')}</div>`;
+      pane.innerHTML = `${head(meta)}<div class="empty">${t('Fichier binaire : pas d’aperçu. Télécharge-le ou demande à une IA.')}</div>`;
     } else if (md && !S.editing && !S.mdSource) {
       pane.innerHTML = `${head(meta)}<div class="md card-pad" id="mdview"><div class="skeleton"><span class="spin"></span></div></div>`;
       renderMarkdown(f.content, { base: P, path: S.sel }).then((h) => { if (tok === S.pvGen && $('#mdview')) $('#mdview').innerHTML = h; })
@@ -2273,7 +2395,7 @@ async function viewProject(main, slug, tab, query) {
       ${g.changes.length ? `<div class="stack" style="gap:16px">
         <section class="card card-pad stack">
           <label class="field"><span>${t('Message du commit')}</span><textarea id="commit-msg" rows="3" placeholder="${t('Décris les changements')}">${esc(msg)}</textarea></label>
-          <button class="btn ghost sm" style="align-self:flex-start" data-act="suggest">${ic('spark', 14)}${t('Rédiger avec Claude')}</button>
+          <button class="btn ghost sm" style="align-self:flex-start" data-act="suggest">${ic('spark', 14)}${t('Rédiger avec {agent}', { agent: agentShort(agentsInfo?.default_agent) })}</button>
           <button class="btn primary" data-act="commit" ${chosen ? '' : 'disabled'}>${ic('check', 16, 2)}${g.remote ? t('Valider et pousser') : t('Valider le commit')}${chosen < g.changes.length ? ` ${tp(chosen, '{n} fichier', '{n} fichiers')}` : ''}</button>
         </section>
       </div>` : ''}</div>`;
@@ -2450,9 +2572,11 @@ async function viewProject(main, slug, tab, query) {
     if (!r || !$('#repo-acts')) return;
     $('#repo-name').textContent = `tmux · ${r.name}`;
     if (isCodex()) {
-      // Codex : ni contexte, ni Remote Control (fonctions propres à Claude)
+      // Codex : pas de Remote Control (propre à Claude) ; état lu à l'écran de son terminal
       setHTML($('#repo-st'), !r.exists ? `<span class="pill sm">${t('Session fermée')}</span>`
-        : r.claude ? `<span class="pill sm ok"><span class="dot"></span>${t('Codex actif')}</span>` : `<span class="pill sm warn"><span class="dot"></span>${t('Codex arrêté · shell')}</span>`);
+        : !r.claude ? `<span class="pill sm warn"><span class="dot"></span>${t('Codex arrêté · shell')}</span>`
+          : r.status === 'waiting' ? `<span class="pill sm warn" title="${esc(r.question || '')}"><span class="dot"></span>${t('Codex attend ta validation')}</span>${ctxPill(r.context)}`
+            : `<span class="pill sm ok"><span class="dot"></span>${r.status === 'busy' ? t('Codex travaille') : t('Codex actif')}</span>${ctxPill(r.context)}`);
       setHTML($('#repo-acts'), `${r.exists && !r.claude ? `<button class="btn sm primary" data-act="repo-restart">${ic('play', 16, 2)}${t('Relancer Codex')}</button>` : ''}
         <button class="btn icon sm" data-act="repo-more" aria-label="${t('Plus d’actions sur la session tmux')}">${ic('dotsV', 20)}</button>`);
       return;
@@ -2524,12 +2648,12 @@ async function viewProject(main, slug, tab, query) {
     const d = document.createElement('dialog');
     d.innerHTML = `<form method="dialog">
       <h2>${t('Travailler sur une autre branche')}</h2>
-      <p class="muted small" style="margin:0">${t('La branche a sa propre copie du projet (dans {dir}, à côté des projets) et sa propre session Claude. Le dossier principal reste sur {branch}.', { dir: '<span class="mono">.branches</span>', branch: `<span class="mono">${esc(b.current || t('sa branche'))}</span>` })}</p>
+      <p class="muted small" style="margin:0">${t('La branche a sa propre copie du projet (dans {dir}, à côté des projets) et ses propres sessions d’IA (Claude Code, Codex). Le dossier principal reste sur {branch}.', { dir: '<span class="mono">.branches</span>', branch: `<span class="mono">${esc(b.current || t('sa branche'))}</span>` })}</p>
       <label class="field"><span>${t('Branche')}</span><input name="b" list="br-list" required maxlength="120" placeholder="${t('ma-fonctionnalite')}" autocomplete="off" spellcheck="false">
         <span class="hint">${t('Nouvelle branche créée depuis {branch}, ou branche existante (locale ou sur le dépôt distant).', { branch: esc(b.current || t('la branche courante')) })}</span></label>
       <datalist id="br-list">${existing.map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
       ${existing.length ? `<div class="row" style="gap:6px;flex-wrap:wrap">${existing.slice(0, 8).map((x) => `<button type="button" class="chip sm mono" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
-      <label class="row small" style="gap:8px"><input type="checkbox" name="claude" checked class="chk">${t('Ouvrir Claude sur cette branche')}</label>
+      <label class="row small" style="gap:8px"><input type="checkbox" name="claude" checked class="chk">${S.agent === 'codex' ? t('Ouvrir Codex sur cette branche') : t('Ouvrir Claude sur cette branche')}</label>
       <div class="row" style="justify-content:flex-end">
         <button type="button" class="btn ghost" data-close>${t('Annuler')}</button>
         <button class="btn primary" value="ok">${ic('branch', 18, 2)}${t('Créer la copie')}</button>
@@ -2570,7 +2694,7 @@ async function viewProject(main, slug, tab, query) {
       const d = document.createElement('dialog');
       const dir = { path: `<span class="mono">${esc(c.path)}</span>` };
       d.innerHTML = `<form method="dialog"><h2>${t('Supprimer la copie de {branch} ?', { branch: esc(c.branch) })}</h2>
-        <p class="muted" style="margin:0">${c.session ? t('Le dossier {path} est supprimé, et sa session Claude fermée.', dir) : t('Le dossier {path} est supprimé.', dir)} ${t('Les commits restent dans le dépôt.')}${c.changes ? ` <b class="c-err">${tp(c.changes, '{n} fichier non validé sera perdu.', '{n} fichiers non validés seront perdus.')}</b>` : ''}</p>
+        <p class="muted" style="margin:0">${c.session || c.codex_session ? t('Le dossier {path} est supprimé, et ses sessions d’IA fermées.', dir) : t('Le dossier {path} est supprimé.', dir)} ${t('Les commits restent dans le dépôt.')}${c.changes ? ` <b class="c-err">${tp(c.changes, '{n} fichier non validé sera perdu.', '{n} fichiers non validés seront perdus.')}</b>` : ''}</p>
         <label class="row small" style="gap:8px;align-items:flex-start"><input type="checkbox" name="del" class="chk" ${c.ahead ? '' : 'checked'}><span>${t('Supprimer aussi la branche {branch}', { branch: esc(c.branch) })}<br><span class="muted">${t('Seulement si elle est fusionnée. Jamais sur le dépôt distant (GitHub…).')}</span></span></label>
         <div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-close>${t('Annuler')}</button><button class="btn danger" value="ok">${t('Supprimer la copie')}</button></div></form>`;
       document.body.append(d);
@@ -2597,14 +2721,14 @@ async function viewProject(main, slug, tab, query) {
     const main = S.git?.branch || '';
     setHTML(box, cs.length ? cs.map((c) => `<div class="copy-row">
         <span class="lead" aria-hidden="true">${ic('branch', 18, 2)}</span>
-        <div class="two" style="flex:1;min-width:0"><span class="row nowrap" style="gap:8px;min-width:0"><b class="mono ellipsis">${esc(c.branch)}</b>${c.claude ? `<span class="pill sm ${c.status === 'busy' ? 'warn' : 'ok'}"><span class="dot"></span>${c.status === 'busy' ? t('Claude travaille') : 'Claude'}</span>` : ''}</span>
+        <div class="two" style="flex:1;min-width:0"><span class="row nowrap" style="gap:8px;min-width:0"><b class="mono ellipsis">${esc(c.branch)}</b>${c.claude ? `<span class="pill sm ${c.status === 'busy' ? 'warn' : 'ok'}">${agentLogo('claude', 14)}${c.status === 'busy' ? t('Claude travaille') : 'Claude'}</span>` : ''}${c.codex ? `<span class="pill sm ${c.codex_status === 'idle' || !c.codex_status ? 'ok' : 'warn'}">${agentLogo('codex', 14)}${c.codex_status === 'busy' ? t('Codex travaille') : c.codex_status === 'waiting' ? t('Codex attend ta validation') : 'Codex'}</span>` : ''}</span>
           <span class="sub ellipsis">${[c.changes ? tp(c.changes, '{n} non validé', '{n} non validés') : '', c.ahead ? tp(c.ahead, '{n} commit d’avance', '{n} commits d’avance') : t('à jour'), c.behind ? t('{n} de retard sur {branch}', { n: c.behind, branch: esc(main) }) : ''].filter(Boolean).join(' · ')}${c.subject ? ` · ${esc(c.subject)}` : ''}</span></div>
         <div class="row nowrap" style="gap:6px">
-          <button class="btn sm tonal" data-act="copy-claude" data-b="${esc(c.branch)}"><img src="/logos/claude.svg" alt="" width="16" height="16">Claude</button>
+          ${aiAgents().map((a) => `<button class="btn sm tonal" data-act="copy-claude" data-agent="${a}" data-b="${esc(c.branch)}" title="${a === 'codex' ? t('Ouvrir Codex sur cette branche') : t('Ouvrir Claude sur cette branche')}">${agentLogo(a, 16)}${agentShort(a)}</button>`).join('')}
           <button class="btn sm" data-act="copy-merge" data-b="${esc(c.branch)}" ${c.ahead ? '' : 'disabled'} title="${t('Fusionner dans {branch}', { branch: esc(main) })}">${ic('download', 16, 2)}<span class="hide-sm">${t('Fusionner')}</span></button>
           <button class="btn icon sm" data-act="copy-remove" data-b="${esc(c.branch)}" aria-label="${t('Supprimer la copie de {branch}', { branch: esc(c.branch) })}">${ic('trash', 16)}</button>
         </div></div>`).join('')
-      : `<div class="empty small">${t('Aucune. Crée une copie pour faire travailler Claude sur une autre branche sans toucher à {branch}.', { branch: `<span class="mono">${esc(main || t('la branche courante'))}</span>` })}</div>`);
+      : `<div class="empty small">${t('Aucune. Crée une copie pour faire travailler une IA sur une autre branche sans toucher à {branch}.', { branch: `<span class="mono">${esc(main || t('la branche courante'))}</span>` })}</div>`);
   }
   function disposeRepoTerm() {
     S.repoGen++;
@@ -2656,7 +2780,7 @@ async function viewProject(main, slug, tab, query) {
   function taskAgent() {
     const avail = availableAgents();
     if (S.taskAgent && avail.includes(S.taskAgent)) return S.taskAgent;
-    return avail.includes(S.agent) || !avail.length ? S.agent : agentId(agentsInfo?.default_agent);
+    return avail.includes(S.agent) || !avail.length ? S.agent : avail.includes(agentsInfo?.default_agent) ? agentsInfo.default_agent : avail[0];
   }
   function modeOptions(a, cur) { return agentModes(a).map((m) => `<option value="${esc(m.id)}" ${m.id === cur ? 'selected' : ''}>${esc(m.label)}</option>`).join(''); }
   async function drawAgentHistory() {
@@ -2667,7 +2791,7 @@ async function viewProject(main, slug, tab, query) {
       const h = list.filter((x) => x.prompts > 0);
       if (!$('#history') || ag !== S.agent) return;
       $('#history').innerHTML = h.length ? h.slice(0, 12).map((x) => `<div class="chist-row">
-          <button type="button" class="chist-main" data-act="transcript" data-id="${esc(x.id)}" title="${t('Lire la conversation')}"><span class="ellipsis">${esc(x.title)}</span><span class="small muted">${ago(x.mtime)} · ${tp(x.prompts, '{n} message', '{n} messages')}</span></button>
+          <button type="button" class="chist-main" data-act="transcript" data-id="${esc(x.id)}" title="${t('Lire la conversation')}"><span class="ellipsis">${esc(x.title)}</span><span class="small muted">${ago(x.mtime)} · ${tp(x.prompts, '{n} message', '{n} messages')}${x.task ? ` · ${t('tâche de fond')}` : ''}</span></button>
           <button type="button" class="btn icon sm" data-act="h-resume" data-id="${esc(x.id)}" aria-label="${t('Reprendre cette conversation dans le terminal')}" title="${t('Reprendre dans le terminal')}">${ic('play', 16, 2)}</button></div>`).join('')
         : `<div class="empty small">${t('Aucune conversation enregistrée pour ce dossier.')}</div>`;
     } catch (_) { if ($('#history') && ag === S.agent) $('#history').innerHTML = `<div class="empty small">${t('Aucune conversation enregistrée pour ce dossier.')}</div>`; }
@@ -2702,8 +2826,8 @@ async function viewProject(main, slug, tab, query) {
           <form class="task-compose" id="task-form">
             <label class="sr" for="task-prompt">${t('Consigne')}</label>
             <textarea id="task-prompt" rows="3" placeholder="${t('Ex. : ajoute des tests pour le module de paiement et corrige ce qui échoue')}">${esc(S.taskDraft || '')}</textarea>
-            <div class="row nowrap" style="justify-content:space-between;gap:8px">
-              <span class="row nowrap" style="gap:6px;min-width:0">
+            <div class="row task-opts" style="justify-content:space-between;gap:8px">
+              <span class="row" style="gap:6px;min-width:0;flex:1 1 auto">
                 ${pickTask ? `<label class="row small nowrap" style="gap:8px;min-width:0"><span class="sr">${t('Agent')}</span><select id="task-agent" class="sm">${choices.map((a) => `<option value="${a}" ${a === tAgent ? 'selected' : ''}>${AGENT_LABELS[a]}</option>`).join('')}</select></label>` : ''}
                 <label class="row small nowrap" style="gap:8px;min-width:0"><span class="sr">${t('Permissions')}</span><select id="task-mode" class="sm">${modeOptions(tAgent, mode)}</select></label>
               </span>
@@ -3061,7 +3185,12 @@ async function viewProject(main, slug, tab, query) {
   };
   bind(main, {
     tab: (el) => setTab(el.dataset.tab),
-    'claude-open': () => openClaude(),
+    // Une seule IA installée : on l'ouvre ; les deux : fenêtre de choix
+    'claude-open': async () => {
+      const list = aiAgents();
+      const a = list.length > 1 ? await chooseAgent(slug, info.name) : list[0];
+      if (a) openClaude(a);
+    },
     'agent-pick': (el) => pickAgent(el.dataset.agent),
     // Onglet Claude sans session : ouvrir en reprenant (ou non) la dernière conversation
     'claude-start-off': async (el) => {
@@ -3074,7 +3203,20 @@ async function viewProject(main, slug, tab, query) {
     },
     'br-pick': (el) => pickBranch(el.dataset.b),
     'copy-new': () => newCopy(),
-    'copy-claude': (el) => pickBranch(el.dataset.b),
+    // Ouvre la copie de la branche dans l'IA choisie (chacune a sa session tmux par branche)
+    'copy-claude': (el) => {
+      const a = agentId(el.dataset.agent || S.agent);
+      if (a !== S.agent) {
+        S.agent = a; setAgentPref(slug, a); disposeRepoTerm(); S.repo = null; S.repoKey = ''; drawClaudeBtn();
+        if (S.tab === 'claude') {
+          S.br = el.dataset.b || null; claudeStartFor = slug;
+          history.replaceState(null, '', claudeHash(slug, S.br, S.agent));
+          $('#pane').innerHTML = ''; drawClaudeTab();
+          return;
+        }
+      }
+      pickBranch(el.dataset.b, true);
+    },
     'copy-merge': (el) => { const c = S.copies?.find((x) => x.branch === el.dataset.b); if (c) mergeCopy(c); },
     'copy-remove': (el) => { const c = S.copies?.find((x) => x.branch === el.dataset.b); if (c) removeCopy(c); },
     'repo-key': async (el) => {
@@ -3161,15 +3303,18 @@ async function viewProject(main, slug, tab, query) {
     term: (el) => { if (el.dataset.t !== S.termTarget) { S.termTarget = el.dataset.t; mountDrawer(); } },
     'see-term': () => openDrawer('claude'),
     'link-remote': () => linkRemote(),
-    'claude-menu': (el) => menu(el, [
-      { label: !isCodex() && S.repo?.claude ? t('Terminal Claude (tmux)') : t('Ouvrir Claude dans un terminal'), icon: 'term', run: () => openClaude('claude') },
-      showAgentSwitch() ? { label: isCodex() && S.repo?.claude ? t('Terminal Codex (tmux)') : t('Ouvrir Codex dans un terminal'), icon: 'term', run: () => openClaude('codex') } : null,
-      { label: t('Lancer avec des options…'), icon: 'sliders', run: launchHere },
-      S.claude?.running
-        ? { label: t('Voir la session en arrière-plan'), icon: 'eye', run: () => openDrawer('claude') }
-        : { label: t('Lancer en arrière-plan (Remote Control)'), icon: 'phone', run: startHere },
+    'claude-menu': (el) => {
+      const open = (a) => agentReposOf(slug).some((x) => x.agent === a && !x.branch) || (S.agent === a && S.repo?.claude && !S.br);
+      menu(el, [
+        claudeOn() || open('claude') ? { label: open('claude') ? t('Terminal Claude (tmux)') : t('Ouvrir Claude dans un terminal'), icon: 'term', run: () => openClaude('claude') } : null,
+        codexOn() || open('codex') ? { label: open('codex') ? t('Terminal Codex (tmux)') : t('Ouvrir Codex dans un terminal'), icon: 'term', run: () => openClaude('codex') } : null,
+        { label: t('Lancer avec des options…'), icon: 'sliders', run: launchHere },
+        S.claude?.running
+          ? { label: t('Voir la session en arrière-plan'), icon: 'eye', run: () => openDrawer('claude') }
+          : claudeOn() ? { label: t('Lancer Claude en arrière-plan (Remote Control)'), icon: 'phone', run: startHere } : null,
       { label: t('Confier une tâche de fond…'), icon: 'task', run: () => { setTab('claude'); setTimeout(() => $('#task-prompt')?.focus(), 300); } },
-    ]),
+      ]);
+    },
     'git-sync': async (el) => { el.disabled = true; await syncRemote(true); el.disabled = false; toast(t('Dépôt distant : {status}', { status: syncText(S.git) })); },
     'repo-rc': async (el) => {
       el.disabled = true;
@@ -3304,10 +3449,10 @@ async function viewProject(main, slug, tab, query) {
     },
     suggest: async (el) => {
       el.disabled = true;
-      el.innerHTML = `<span class="spin"></span>${t('Claude rédige…')}`;
+      el.innerHTML = `<span class="spin"></span>${t('{agent} rédige…', { agent: agentShort(agentsInfo?.default_agent) })}`;
       try { const r = await api('POST', `${P}/git/suggest`); if ($('#commit-msg')) $('#commit-msg').value = r.message; } catch (e) { fail(e); }
       el.disabled = false;
-      el.innerHTML = `${ic('spark', 14)}${t('Rédiger avec Claude')}`;
+      el.innerHTML = `${ic('spark', 14)}${t('Rédiger avec {agent}', { agent: agentShort(agentsInfo?.default_agent) })}`;
     },
     pull: async () => { try { const r = await api('POST', `${P}/git/pull`); toast(r.output || t('À jour')); await loadGit(); drawGit(); drawPills(); } catch (e) { fail(e); } },
     pick: async (el) => {
@@ -3399,6 +3544,8 @@ async function viewProject(main, slug, tab, query) {
   api('GET', `/api/tasks?project=${enc(slug)}&limit=10`).then((list) => { S.tasks = list; drawTasks(); }).catch(() => {});
   // Direct : la session de ce projet et ses tâches. Le journal, lui, est relu toutes les 2,5 s quand l’onglet Claude est ouvert.
   onLeave(onLive((st) => {
+    const ak = JSON.stringify((st.repos || []).filter((x) => x.slug === slug).map((x) => [x.agent, x.branch, x.claude, x.status, x.question]));
+    if (ak !== S.aiKey) { S.aiKey = ak; drawPills(); drawTabs(); }
     const s = st.sessions.find((x) => x.slug === slug);
     const k = s ? JSON.stringify([s.phase, s.url, s.question, s.mode, s.exit_code]) : 'off';
     if (k !== S.liveKey) { S.liveKey = k; loadClaude(); }
@@ -3547,7 +3694,9 @@ async function viewNew(main) {
   if (isStale(gen)) return;
   const root = overview?.root || settings.projects_root || '';
   // opts.agent : agent démarré après la création ('' : aucun)
-  const S = { source: 'vide', template: 'node', opts: { git: true, claudemd: true, agentsmd: codexOn(), deploy: false, domain: false, agent: 'claude' } };
+  // IA démarrée après la création : celle par défaut parmi les IA installées
+  const npAgent = claudeOn() && agentsInfo?.default_agent !== 'codex' ? 'claude' : codexOn() ? 'codex' : '';
+  const S = { source: 'vide', template: 'node', opts: { git: true, claudemd: claudeOn(), agentsmd: codexOn(), deploy: false, domain: false, agent: npAgent } };
   const npMode = (a) => (a === 'codex' ? settings.codex_default_mode || agentDef('codex')?.default_mode || 'auto' : settings.default_mode || 'acceptEdits');
   const npModes = (a) => agentModes(a).map((m) => `<option value="${esc(m.id)}" ${m.id === npMode(a) ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
   const OPTIONS = [
@@ -3587,11 +3736,11 @@ async function viewNew(main) {
           ${OPTIONS.map(([id, l, h]) => `<label class="check"><span><b>${l}</b><small>${esc(h)}</small></span><input type="checkbox" role="switch" class="switch" data-opt="${id}" ${S.opts[id] ? 'checked' : ''}></label>`).join('')}
           <div class="fgrid">
             <label class="field"><span>${t('Démarrer un agent après la création')}</span><select name="agent" id="np-agent">
-              <option value="">${t('Aucun')}</option>
-              <option value="claude" selected>${t('Claude Code (Remote Control)')}</option>
-              <option value="codex" ${codexOn() ? '' : 'disabled'}>${codexOn() ? 'Codex' : t('Codex (non installé)')}</option></select>
+              <option value="" ${npAgent ? '' : 'selected'}>${t('Aucun')}</option>
+              <option value="claude" ${claudeOn() ? '' : 'disabled'} ${claudeOn() && agentsInfo?.default_agent !== 'codex' ? 'selected' : ''}>${claudeOn() ? t('Claude Code (Remote Control)') : t('Claude Code (non installé)')}</option>
+              <option value="codex" ${codexOn() ? '' : 'disabled'} ${codexOn() && (agentsInfo?.default_agent === 'codex' || !claudeOn()) ? 'selected' : ''}>${codexOn() ? 'Codex' : t('Codex (non installé)')}</option></select>
               <span class="hint">${t('Ouvre la session dans ce dossier dès la création')}</span></label>
-            <label class="field" id="np-mode"><span id="np-mode-l">${t('Permissions de Claude')}</span><select name="mode">${npModes('claude')}</select></label>
+            <label class="field" id="np-mode" ${npAgent ? '' : 'hidden'}><span id="np-mode-l">${npAgent === 'codex' ? t('Permissions de Codex') : t('Permissions de Claude')}</span><select name="mode">${npModes(npAgent || 'claude')}</select></label>
           </div>
         </section>
         <div class="row" style="justify-content:flex-end">
@@ -3701,6 +3850,7 @@ async function viewNew(main) {
 /* ------------------------------------------------------------------ sessions */
 function sessionState(r) {
   if (!r.claude) return { cls: 'warn', text: r.agent === 'codex' ? t('Shell · Codex arrêté') : t('Shell · Claude arrêté') };
+  if (r.status === 'waiting') return { cls: 'warn', text: r.question ? t('Attend ta validation : {question}', { question: r.question }) : t('Attend ta validation') };
   if (r.status === 'busy') return { cls: 'busy', text: t('Travaille…') };
   if (r.status === 'idle') return { cls: 'ok', text: `${t('En attente')}${r.since ? ` · ${ago(r.since)}` : ''}` };
   return { cls: 'ok', text: t('Actif') };
@@ -3739,7 +3889,7 @@ async function viewSessions(main) {
   let repos = [], headless = [], drawer = { key: null, dispose: null, gen: 0 };
   const rkey = (r) => r.key || r.slug;
   const byKey = (k) => repos.find((r) => rkey(r) === k);
-  main.innerHTML = `${pageHeader(t('Sessions Claude'), t('Claude dans le terminal de chaque projet (tmux), sessions en arrière-plan et conversations passées.'))}
+  main.innerHTML = `${pageHeader(t('Sessions IA'), t('Claude Code et Codex dans le terminal de chaque projet (tmux), sessions en arrière-plan et conversations passées.'))}
     <section aria-labelledby="ses-t" class="stack" style="gap:12px">
       <h2 id="ses-t" class="sec-title">${t('En cours')} <span class="badge" id="ses-n" hidden></span></h2>
       <div class="scards" id="scards"></div>
@@ -3766,7 +3916,7 @@ async function viewSessions(main) {
       // Nouvelle liste : on redessine en gardant les messages en cours de saisie
       const drafts = Object.fromEntries($$('.ssend', box).map((f) => [f.dataset.key, f.msg.value]));
       box.innerHTML = repos.length ? repos.map((r) => sessionCard(r, proj(r.slug))).join('')
-        : `<div class="empty card">${t('Aucun Claude ouvert. Lance-le depuis un {link} (bouton « Ouvrir Claude »).', { link: `<a href="#/projets">${t('projet')}</a>` })}</div>`;
+        : `<div class="empty card">${t('Aucune IA ouverte. Lance-la depuis un {link} (bouton « {button} »).', { link: `<a href="#/projets">${t('projet')}</a>`, button: esc(openAiLabel()) })}</div>`;
       box.dataset.keys = keys;
       for (const f of $$('.ssend', box)) if (drafts[f.dataset.key]) f.msg.value = drafts[f.dataset.key];
     } else {
@@ -3800,11 +3950,12 @@ async function viewSessions(main) {
   let hist = [], hq = '';
   const drawHistory = () => {
     const q = norm(hq.trim());
-    const list = hist.filter((c) => !q || norm(`${c.title} ${c.project}`).includes(q));
+    const list = hist.filter((c) => !q || norm(`${c.title} ${c.project} ${agentShort(c.agent)}`).includes(q));
+    const da = (c) => `data-slug="${esc(c.slug)}" data-id="${esc(c.id)}" data-agent="${agentId(c.agent)}"`;
     setHTML($('#hist'), list.length ? list.map((c) => `<div class="list-row">${projectIcon({ slug: c.slug, icon: c.icon })}
-        <span class="two" style="flex:1;min-width:0"><span class="ellipsis">${esc(c.title)}</span><span class="sub ellipsis">${esc(c.project)} · ${ago(c.mtime)} · ${tp(c.prompts, '{n} message', '{n} messages')}</span></span>
-        <button class="btn sm" data-act="h-read" data-slug="${esc(c.slug)}" data-id="${esc(c.id)}">${ic('eye', 16, 2)}${t('Lire')}</button>
-        <button class="btn sm tonal" data-act="h-resume" data-slug="${esc(c.slug)}" data-id="${esc(c.id)}">${ic('play', 16, 2)}${t('Reprendre')}</button></div>`).join('')
+        <span class="two" style="flex:1;min-width:0"><span class="ellipsis">${esc(c.title)}</span><span class="sub row nowrap" style="gap:6px;min-width:0">${agentLogo(c.agent, 14)}<span class="ellipsis">${esc(agentShort(c.agent))} · ${esc(c.project)} · ${ago(c.mtime)} · ${tp(c.prompts, '{n} message', '{n} messages')}${c.task ? ` · ${t('tâche de fond')}` : ''}</span></span></span>
+        <button class="btn sm" data-act="h-read" ${da(c)} title="${t('Lire')}" aria-label="${t('Lire')}">${ic('eye', 16, 2)}<span class="hide-sm">${t('Lire')}</span></button>
+        <button class="btn sm tonal" data-act="h-resume" ${da(c)} title="${t('Reprendre')}" aria-label="${t('Reprendre')}">${ic('play', 16, 2)}<span class="hide-sm">${t('Reprendre')}</span></button></div>`).join('')
       : `<div class="empty small">${hist.length ? t('Aucune conversation ne correspond.') : t('Aucune conversation enregistrée.')}</div>`);
   };
   const loadHistory = async () => {
@@ -3878,13 +4029,15 @@ async function viewSessions(main) {
         { label: t('Fermer la session tmux'), icon: 'trash', danger: true, run: async () => { if (drawer.key === rkey(r)) closeDrawer(); if (await killRepo(r.slug, r.tmux, r.branch, r.agent)) loadPreviews(); } },
       ]);
     },
-    'h-read': (el) => openTranscript(`/api/projects/${enc(el.dataset.slug)}`, el.dataset.id),
+    'h-read': (el) => openTranscript(`/api/projects/${enc(el.dataset.slug)}`, el.dataset.id, el.dataset.agent),
     'h-resume': async (el) => {
       el.disabled = true;
       try {
-        await api('POST', `/api/projects/${enc(el.dataset.slug)}/claude/repo/resume`, { id: el.dataset.id });
+        const ag = agentId(el.dataset.agent);
+        await api('POST', `/api/projects/${enc(el.dataset.slug)}/claude/repo/resume${brQ(null, ag)}`, { id: el.dataset.id });
         toast(t('Conversation reprise dans le terminal du projet'));
-        location.hash = `#/projets/${enc(el.dataset.slug)}/claude`;
+        setAgentPref(el.dataset.slug, ag);
+        location.hash = claudeHash(el.dataset.slug, null, ag);
       } catch (e) { fail(e); el.disabled = false; }
     },
   });
@@ -4327,6 +4480,10 @@ async function viewSettings(main) {
   if (isStale(gen)) return;
   if (s.agents?.agents) agentsInfo = s.agents;
   const codexInfo = agentDef('codex') || { available: false, bin: s.codex_bin };
+  const claudeInfo = agentDef('claude') || { available: true, bin: s.claude_bin };
+  // Délais d'actualisation de l'utilisation, communs à Claude et Codex
+  const everyOpts = (cur) => [[2, t('Toutes les {n} min', { n: 2 })], [5, t('Toutes les {n} min', { n: 5 })], [10, t('Toutes les {n} min', { n: 10 })], [15, t('Toutes les {n} min', { n: 15 })], [30, t('Toutes les {n} min', { n: 30 })], [60, t('Toutes les heures')], [0, t('Seulement quand l’Accueil est ouvert')]]
+    .map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('');
   const codexModes = agentModes('codex');
   main.innerHTML = `${pageHeader(t('Paramètres'), t('Enregistrés dans {path} sur le serveur.', { path: '<span class="mono">~/.config/helmshell/config.json</span>' }))}
     <form id="settings" class="stack" style="gap:0">
@@ -4338,20 +4495,29 @@ async function viewSettings(main) {
         <label class="field"><span>${t('Agent par défaut')}</span><select name="default_agent">${[['', t('Automatique')], ['claude', 'Claude Code'], ['codex', 'Codex']].map(([v, l]) => `<option value="${v}" ${v === (s.default_agent || '') ? 'selected' : ''}>${l}</option>`).join('')}</select>
           <span class="hint">${t('Agent proposé pour les tâches de fond et les nouvelles sessions. Automatique : Claude Code s’il est installé, sinon Codex.')}</span></label>
         <label class="check"><span><b>${t('Vérifier les mises à jour')}</b><small>${t('Interroge GitHub au plus une fois par jour pour savoir si une nouvelle version de Helmshell est publiée. Rien d’autre n’est envoyé.')}</small></span><input type="checkbox" role="switch" class="switch" name="update_check" ${s.update_check !== false ? 'checked' : ''}></label>
-        <h3 class="sec-h agent-h">${agentLogo('claude', 22)}Claude Code</h3>
+        <h3 class="sec-h agent-h">${agentLogo('claude', 22)}Claude Code ${claudeInfo.available ? `<span class="pill sm ok"><span class="dot"></span>${t('Installé')}</span>` : `<span class="pill sm warn"><span class="dot"></span>${t('Introuvable')}</span>`}</h3>
+        ${claudeInfo.available ? '' : `<p class="hint" style="margin:0">${t('Commande {bin} introuvable sur le serveur. Installe Claude Code ({cmd}) puis connecte-toi avec {login}, ou indique son chemin ci-dessous.', { bin: `<span class="mono">${esc(claudeInfo.bin || 'claude')}</span>`, cmd: '<span class="mono">curl -fsSL https://claude.ai/install.sh | bash</span>', login: '<span class="mono">claude</span>' })}</p>`}
         <div class="fgrid">
           <label class="field"><span>${t('Exécutable Claude')}</span><input name="claude_bin" class="mono" value="${esc(s.claude_bin)}"></label>
           <label class="field"><span>${t('Permissions par défaut')}</span><select name="default_mode">${MODES.map((m) => `<option value="${m.id}" ${m.id === s.default_mode ? 'selected' : ''}>${m.label}</option>`).join('')}</select></label>
         </div>
         <label class="field"><span>${t('Actualiser l’utilisation de Claude')}</span><select name="usage_every">${[[2, t('Toutes les {n} min', { n: 2 })], [5, t('Toutes les {n} min', { n: 5 })], [10, t('Toutes les {n} min', { n: 10 })], [15, t('Toutes les {n} min', { n: 15 })], [30, t('Toutes les {n} min', { n: 30 })], [60, t('Toutes les heures')], [0, t('Seulement quand l’Accueil est ouvert')]]
     .map(([v, l]) => `<option value="${v}" ${v === s.usage_every ? 'selected' : ''}>${l}</option>`).join('')}</select>
-          <span class="hint">${t('Chiffres de la carte « Utilisation de Claude » de l’Accueil, lus avec la commande {cmd} de Claude Code. Elle ne sollicite pas le modèle : aucun jeton consommé.', { cmd: '<span class="mono">/usage</span>' })}</span></label>
+          <span class="hint">${t('Chiffres du bouton « Utilisation de Claude » de la barre du haut, lus avec la commande {cmd} de Claude Code. Elle ne sollicite pas le modèle : aucun jeton consommé.', { cmd: '<span class="mono">/usage</span>' })}</span></label>
         <h3 class="sec-h agent-h">${agentLogo('codex', 22)}Codex ${codexInfo.available ? `<span class="pill sm ok"><span class="dot"></span>${t('Installé')}</span>` : `<span class="pill sm warn"><span class="dot"></span>${t('Introuvable')}</span>`}</h3>
+        ${codexInfo.available && codexInfo.sandbox && !codexInfo.sandbox.ok ? `<div class="notice warn stack" style="gap:8px" id="codex-sbx">
+          <span>${t('Le bac à sable de Codex ne démarre pas sur ce serveur : en Lecture seule et en Automatique, toutes ses commandes sont refusées. Seul l’Accès complet fonctionne, sans protection.')}</span>
+          ${codexInfo.sandbox.fix ? `<span>${t('Correctif : installe le paquet bubblewrap du système (son profil AppArmor autorise le bac à sable), puis vérifie à nouveau.')}</span><code class="mono">${esc(codexInfo.sandbox.fix)}</code>` : `<span>${t('bubblewrap est installé mais refusé : vérifie la règle AppArmor des espaces de noms (kernel.apparmor_restrict_unprivileged_userns).')}</span>`}
+          ${codexInfo.sandbox.detail ? `<span class="small muted mono">${esc(codexInfo.sandbox.detail)}</span>` : ''}
+          <button type="button" class="btn sm" data-act="codex-sbx" style="align-self:flex-start">${ic('refresh', 16, 2)}${t('Vérifier à nouveau')}</button></div>`
+          : codexInfo.available && codexInfo.sandbox?.ok ? `<p class="hint" style="margin:0">${ic('check', 14, 2)} ${t('Bac à sable de Codex opérationnel.')}</p>` : ''}
         ${codexInfo.available ? '' : `<p class="hint" style="margin:0">${t('Commande {bin} introuvable sur le serveur. Installe Codex CLI ({cmd}) puis connecte-toi avec {login}, ou indique son chemin ci-dessous.', { bin: `<span class="mono">${esc(codexInfo.bin || 'codex')}</span>`, cmd: '<span class="mono">npm install -g @openai/codex</span>', login: '<span class="mono">codex login</span>' })}</p>`}
         <div class="fgrid">
           <label class="field"><span>${t('Exécutable Codex')}</span><input name="codex_bin" class="mono" value="${esc(s.codex_bin || '')}" placeholder="codex"></label>
           <label class="field"><span>${t('Permissions par défaut de Codex')}</span><select name="codex_default_mode">${codexModes.map((m) => `<option value="${esc(m.id)}" ${m.id === s.codex_default_mode ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></label>
         </div>
+        <label class="field"><span>${t('Actualiser l’utilisation de Codex')}</span><select name="codex_usage_every">${everyOpts(s.codex_usage_every ?? 5)}</select>
+          <span class="hint">${t('Chiffres du bouton « Utilisation de Codex » de la barre du haut, lus auprès du compte par le serveur d’application de Codex ({cmd}). Aucun message au modèle : aucun jeton consommé.', { cmd: '<span class="mono">account/rateLimits/read</span>' })}</span></label>
       </section>
       <section class="card form-section" data-pane="deploy" ${settingsTab === 'deploy' ? '' : 'hidden'}>
         <h2><span class="ic2">${ic('upload', 20, 2)}</span>${t('Déploiement')}</h2>
@@ -4403,7 +4569,7 @@ async function viewSettings(main) {
       </section>
       <section class="card form-section" data-pane="notif" ${settingsTab === 'notif' ? '' : 'hidden'}>
         <h2><span class="ic2">${ic('bell', 20, 2)}</span>${t('Notifications')}</h2>
-        <p class="muted small" style="margin:0">${t('Quand Claude pose une question, s’arrête, ou qu’une tâche se termine.')}</p>
+        <p class="muted small" style="margin:0">${t('Quand une IA (Claude Code ou Codex) pose une question, attend ta validation, s’arrête, ou qu’une tâche se termine.')}</p>
         <input type="hidden" name="notify_service" value="${esc(s.notify_service || 'off')}">
         <div class="stack" style="gap:8px"><span class="hint" style="font-weight:500">${t('Service')}</span>
           <div class="seg" role="group" aria-label="${t('Service de notification')}" style="align-self:flex-start">${NSVC().map(([id, l]) => `<button type="button" class="ico" data-act="nsvc" data-s="${id}" aria-pressed="${id === (s.notify_service || 'off')}">${id === 'off' ? ic('x', 18, 2) : `<img class="svc-logo" src="/logos/${id}.svg" alt="" width="20" height="20">`}${l}</button>`).join('')}</div></div>
@@ -4426,7 +4592,7 @@ async function viewSettings(main) {
           <label class="field"><span>${t('URL du webhook')}</span><input name="discord_webhook" type="password" class="mono" autocomplete="off" placeholder="${s.discord_webhook_set ? t('•••••••• (déjà enregistrée — laisse vide pour la garder)') : 'https://discord.com/api/webhooks/…'}"></label>
         </div>
         <label class="field" data-svc-any ${s.notify_service === 'off' ? 'hidden' : ''}><span>${t('Adresse de Helmshell vue depuis le téléphone')}</span><input name="public_url" class="mono" value="${esc(s.public_url || location.origin)}" placeholder="${esc(location.origin)}"><span class="hint">${t('Sert aux liens et aux boutons des notifications. Le téléphone doit être sur le réseau local (ou NetBird).')}</span></label>
-        <label class="check" data-svc-any ${s.notify_service === 'off' ? 'hidden' : ''}><span><b>${t('Prévenir quand Claude a fini')}</b><small>${t('Quand Claude, dans le terminal d’un projet, passe de « travaille » à « en attente » (après au moins 20 s de travail).')}</small></span><input type="checkbox" role="switch" class="switch" name="notify_done" ${s.notify_done !== false ? 'checked' : ''}></label>
+        <label class="check" data-svc-any ${s.notify_service === 'off' ? 'hidden' : ''}><span><b>${t('Prévenir quand l’IA a fini')}</b><small>${t('Quand Claude ou Codex, dans le terminal d’un projet, passe de « travaille » à « en attente » (après au moins 20 s de travail).')}</small></span><input type="checkbox" role="switch" class="switch" name="notify_done" ${s.notify_done !== false ? 'checked' : ''}></label>
         <div class="row" data-svc-any ${s.notify_service === 'off' ? 'hidden' : ''}><button type="button" class="btn" data-act="ntfy-test">${ic('bell', 18, 2)}${t('Envoyer une notification de test')}</button><span id="ntfy-res" class="small muted"></span></div>
         <div class="row" id="browser-notif"></div>
       </section>
@@ -4803,6 +4969,15 @@ async function viewSettings(main) {
         $('#acc-res').innerHTML = `<span class="c-ok">${body.lan || body.vpn || body.domain || body.ips.length ? t('Accès réseau appliqué.') : t('Plus de restriction propre à Helmshell.')}</span>`;
       } catch (e) { out.innerHTML = `<span class="c-err">${esc(e.message)}</span>`; }
     },
+    'codex-sbx': async (el) => {
+      el.disabled = true;
+      try {
+        agentsInfo = await api('GET', '/api/agents?recheck=1');
+        const sb = agentDef('codex')?.sandbox;
+        toast(sb?.ok ? t('Bac à sable de Codex opérationnel.') : t('Le bac à sable de Codex ne démarre toujours pas.'), !sb?.ok);
+        if (sb?.ok) $('#codex-sbx')?.remove();
+      } catch (e) { fail(e); } finally { el.disabled = false; }
+    },
     dprov: (el) => {
       const p = el.dataset.p;
       form.deploy_provider.value = p;
@@ -4848,6 +5023,7 @@ async function viewSettings(main) {
       'deploy_provider', 'dokploy_url', 'dokploy_public_url', 'dokploy_environment_id', 'dokploy_server_id']) body[k] = form[k].value;
     if (form.dokploy_token.value) body.dokploy_token = form.dokploy_token.value;
     body.usage_every = Number(form.usage_every.value);
+    if (form.codex_usage_every) body.codex_usage_every = Number(form.codex_usage_every.value);
     body.update_check = form.update_check.checked;
     if (form.coolify_token.value) body.coolify_token = form.coolify_token.value;
     Object.assign(body, notifBody());

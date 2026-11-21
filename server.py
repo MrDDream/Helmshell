@@ -531,7 +531,7 @@ def _agent(req):
 # Agents de code (Claude Code, Codex) : installés ?, modes, agent par défaut
 @route("GET", r"/api/agents")
 def r_agents(req, m):
-    return agents.public_info()
+    return agents.public_info(recheck=req.q("recheck") == "1")
 
 
 @route("GET", r"/api/projects/" + S + r"/agents/history")
@@ -554,9 +554,17 @@ def r_claude_usage(req, m):
     return usage.summary()
 
 
+@route("GET", r"/api/codex/usage")
+def r_codex_usage(req, m):
+    return usage.codex_summary()
+
+
 @route("GET", r"/api/claude/history")
 def r_history_all(req, m):
-    return projects.recent_conversations(min(int(req.q("limit") or 20), 60))
+    agent = req.q("agent") or None
+    if agent not in (None, "claude", "codex"):
+        raise ApiError(_("Agent inconnu"))
+    return projects.recent_conversations(min(int(req.q("limit") or 20), 60), agent)
 
 
 @route("POST", r"/api/projects/" + S + r"/claude/repo/send")
@@ -1009,6 +1017,7 @@ def r_settings(req, m):
     out["totp"] = totp.status()
     out["notify_done"] = config.get("notify_done") is not False
     out["usage_every"] = usage.every()
+    out["codex_usage_every"] = usage.every("codex_usage_every")
     out["modes"] = sorted(claude.MODES)
     out["codex_default_mode"] = codex.default_mode()
     out["codex_modes"] = list(codex.MODE_ORDER)
@@ -1085,13 +1094,14 @@ def r_settings_put(req, m):
             vals[key] = ""
     if "notify_done" in d:
         vals["notify_done"] = bool(d["notify_done"])
-    if "usage_every" in d:
-        try:
-            vals["usage_every"] = int(d["usage_every"])
-        except (TypeError, ValueError):
-            raise ApiError(_("Délai d'actualisation invalide")) from None
-        if vals["usage_every"] not in usage.USAGE_EVERY:
-            raise ApiError(_("Délai d'actualisation invalide"))
+    for key in ("usage_every", "codex_usage_every"):
+        if key in d:
+            try:
+                vals[key] = int(d[key])
+            except (TypeError, ValueError):
+                raise ApiError(_("Délai d'actualisation invalide")) from None
+            if vals[key] not in usage.USAGE_EVERY:
+                raise ApiError(_("Délai d'actualisation invalide"))
     if "notify_service" in vals and vals["notify_service"] not in (*notify.SERVICES, "off"):
         raise ApiError(_("Service de notification inconnu"))
     try:

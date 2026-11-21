@@ -198,7 +198,8 @@ def send(slug, text=None, key=None):
 #
 # Codex (OpenAI) a sa propre session par projet, à côté : « codex-<projet> » (« codex-<projet>@<branche> »
 # pour la copie d'une branche). Les fonctions repo_* prennent `agent="claude"` (défaut) ou "codex".
-# Pour Codex : pas de Remote Control, pas de lien claude.ai, pas d'état « travaille / en attente ».
+# Pour Codex : pas de Remote Control ni de lien claude.ai ; son état (travaille, attend une validation) est lu
+# à l'écran du TUI.
 
 SHELLS = {"bash", "zsh", "sh", "dash", "fish", "-bash", "-zsh", "login"}
 RESERVED = ("claude-", "tache-", "helmshell-", "codex-")
@@ -286,9 +287,16 @@ def repo_state(slug, branch=None, agent="claude"):
     # L'agent tourne au premier plan du volet (le shell lui laisse le terminal : contrôle de tâches)
     alive = bool(cmd) and cmd not in SHELLS
     if agent == "codex":
+        # État lu à l'écran du TUI (travaille, attend une validation, au repos), contexte lu dans sa session
+        from . import codex
+        status, question = "", ""
+        if alive:
+            code, out = _tmux("capture-pane", "-p", "-J", "-t", f"={name}:")
+            status, question = codex.screen_state(out if code == 0 else "")
+        ctx = codex.session_context(_where(slug, branch, agent)[1], created - 5) if alive else None
         return {"exists": True, "name": name, "branch": branch, "agent": agent, "claude": alive, "alive": alive,
-                "command": cmd, "created": created, "url": "", "rc": False, "status": "", "since": 0,
-                "context": None}
+                "command": cmd, "created": created, "url": "", "rc": False, "status": status,
+                "question": question, "since": 0, "context": ctx}
     code, out = _tmux("capture-pane", "-p", "-J", "-t", f"={name}:", "-S", "-2000")
     urls = URL_RE.findall(out if code == 0 else "")
     text = out if code == 0 else ""
@@ -355,9 +363,9 @@ def _codex_cmd(slug, mode=None, cont=False, branch=None, resume_id=None):
     from . import agents, codex
     agents.require("codex")
     path = _where(slug, branch, "codex")[1]
-    # Jamais lancé sur ce serveur (pas de dossier de sessions) : rien à reprendre, on démarre une session neuve.
-    # À VÉRIFIER : comportement de `codex resume --last` sans session passée dans ce dossier.
-    if cont and not (codex.home() / "sessions").is_dir():
+    # `codex resume --last` sans session interactive passée dans ce dossier s'arrête sur une erreur :
+    # on démarre alors une session neuve.
+    if cont and not codex.has_interactive(path):
         cont = False
     return codex.cmd_interactive(path, mode, cont, resume_id)
 
@@ -521,7 +529,8 @@ def list_repo_sessions(with_preview=False, agent=None):
                         "path": str(path), "tmux": st["name"],
                         "started": st.get("created", 0), "claude": st["claude"], "alive": st["alive"],
                         "rc": st["rc"], "url": st["url"],
-                        "status": st.get("status", ""), "since": st.get("since", 0)}
+                        "status": st.get("status", ""), "since": st.get("since", 0),
+                        "question": st.get("question", "")}
                 if with_preview:
                     item["preview"] = preview(p.name, name=st["name"])
                 items.append(item)

@@ -1497,20 +1497,29 @@ def transcripts(slug, limit=8):
     return out
 
 
-def recent_conversations(limit=20):
-    """Dernières conversations Claude de tous les projets."""
+def recent_conversations(limit=20, agent=None):
+    """Dernières conversations de tous les projets : Claude et Codex (`agent` pour n'en garder qu'un)."""
+    from . import agents, codex
     out = []
-    for p in root().iterdir():
-        if not p.is_dir() or p.name.startswith(".") or not SLUG_RE.match(p.name):
-            continue
-        meta = config.project_meta(p.name)
-        try:
-            for c in transcripts(p.name, limit=limit):
-                if not c["prompts"]:
-                    continue  # conversation ouverte puis fermée sans message
-                out.append({**c, "slug": p.name, "project": meta.get("name") or p.name, "icon": icon_version(p.name)})
-        except (ApiError, OSError):
-            continue
+    if agent in (None, "", "claude"):
+        for p in root().iterdir():
+            if not p.is_dir() or p.name.startswith(".") or not SLUG_RE.match(p.name):
+                continue
+            meta = config.project_meta(p.name)
+            try:
+                for c in transcripts(p.name, limit=limit):
+                    if not c["prompts"]:
+                        continue  # conversation ouverte puis fermée sans message
+                    out.append({**c, "agent": "claude", "slug": p.name, "project": meta.get("name") or p.name,
+                                "icon": icon_version(p.name)})
+            except (ApiError, OSError):
+                continue
+    if agent in (None, "", "codex") and (agents.AGENTS["codex"].available() or codex.home().is_dir()):
+        for c in codex.history_all(root(), limit):
+            if not SLUG_RE.match(c["slug"]) or not (root() / c["slug"]).is_dir():
+                continue
+            meta = config.project_meta(c["slug"])
+            out.append({**c, "project": meta.get("name") or c["slug"], "icon": icon_version(c["slug"])})
     out.sort(key=lambda c: c["mtime"], reverse=True)
     return out[:limit]
 

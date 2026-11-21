@@ -1281,7 +1281,9 @@ fieldset.modes.grid .mode input { margin-top: 1px; }
 .brand-logo:has(> img) { background: none; padding: 0; }
 .brand-logo > img { width: 100%; height: 100%; display: block; border-radius: calc(14px * var(--rs)); }
 /* Barre du haut : bouton Claude (anneau d'utilisation autour du logo) et jauges sans le nom du serveur */
-.claude-chip { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; height: 56px; padding: 0 12px 0 10px; border: 0; border-radius: calc(28px * var(--rs)); background: var(--m-s-high); color: var(--m-on-surface); font: inherit; cursor: pointer; transition: background .15s; }
+.ai-chips { margin-left: auto; display: inline-flex; gap: 8px; }
+.ai-chips[hidden], .claude-chip[hidden] { display: none; }
+.claude-chip { display: inline-flex; align-items: center; gap: 10px; height: 56px; padding: 0 12px 0 10px; border: 0; border-radius: calc(28px * var(--rs)); background: var(--m-s-high); color: var(--m-on-surface); font: inherit; cursor: pointer; transition: background .15s; }
 .claude-chip:hover, .claude-chip[aria-expanded="true"] { background: color-mix(in srgb, var(--m-on-surface) 8%, var(--m-s-high)); }
 .claude-chip > svg { color: var(--m-on-surface-variant); }
 .cc-ring { position: relative; width: 38px; height: 38px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
@@ -1295,7 +1297,8 @@ fieldset.modes.grid .mode input { margin-top: 1px; }
 .claude-chip .txt b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .claude-chip.warn .txt b { color: var(--m-warn, #B26A00); }
 .claude-chip.err .txt b { color: var(--m-error); }
-.claude-chip + .health, .claude-chip + .health .gauges { margin-left: 0; }
+.ai-chips + .health, .ai-chips + .health .gauges { margin-left: 0; }
+.codex-chip .cc-ring .val { stroke: var(--m-on-surface); }
 .gauges { padding: 0 14px 0 10px; }
 @media (max-width: 900px) { .claude-chip { height: 48px; gap: 6px; padding: 0 8px 0 6px; } .claude-chip .txt span, .claude-chip > svg { display: none; } .cc-ring, .cc-ring svg { width: 32px; height: 32px; } }
 .cpop { width: min(360px, calc(100vw - 24px)); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -1314,7 +1317,8 @@ fieldset.modes.grid .mode input { margin-top: 1px; }
   .topbar > .cmdk { flex: 1 1 auto; min-width: 0; height: 48px; gap: 12px; padding: 0 14px; }
   .topbar > .cmdk kbd { display: none; }
   .topbar > .avatar { width: 48px; height: 48px; }
-  .topbar > .claude-chip { flex: none; margin: 0; height: 48px; gap: 6px; padding: 0 12px 0 8px; }
+  .topbar > .ai-chips { flex: none; margin: 0; gap: 6px; }
+  .topbar .claude-chip { height: 48px; gap: 6px; padding: 0 12px 0 8px; }
   .topbar > .health { flex: none; min-width: 0; margin: 0; }
   .topbar > .health .gauges { min-width: 0; height: 48px; margin: 0; padding: 0 8px; gap: 2px; }
   .claude-chip .txt span { display: block; }
@@ -1330,7 +1334,8 @@ fieldset.modes.grid .mode input { margin-top: 1px; }
   .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "s s a" "c h h"; padding-bottom: 8px; }
   .topbar > .cmdk { grid-area: s; }
   .topbar > .avatar { grid-area: a; }
-  .topbar > .claude-chip { grid-area: c; height: 52px; }
+  .topbar > .ai-chips { grid-area: c; }
+  .topbar .claude-chip { height: 52px; }
   .topbar > .health { grid-area: h; }
   .topbar > .health .gauges { flex: 1; height: 52px; padding: 0 6px; justify-content: space-around; gap: 0; }
   .cc-ring, .cc-ring svg { width: 34px; height: 34px; }
@@ -1695,3 +1700,25 @@ html { -webkit-tap-highlight-color: transparent; }
 .upd-cmd { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-radius: calc(12px * var(--rs)); background: var(--term-bg); color: #DDE4E1; }
 .upd-cmd code { flex: 1; min-width: 0; font-size: 12.5px; white-space: pre-wrap; word-break: break-all; background: none; color: inherit; }
 .upd-cmd .btn { color: #DDE4E1; flex: none; }
+
+/* Choix de l'IA (Claude Code ou Codex) quand les deux sont installés */
+dialog.agentdlg { width: min(520px, calc(100vw - 32px)); padding: 24px; box-sizing: border-box; }
+@media (max-width: 520px) { dialog.agentdlg { padding: 20px 16px; } .agent-tile { padding: 14px; } }
+dialog.agentdlg h2 { font-size: 22px; line-height: 28px; }
+@media (max-width: 520px) { .agent-tiles { grid-template-columns: minmax(0, 1fr); } }
+.task-opts select { max-width: 100%; min-width: 0; }
+.task-opts > .btn { margin-left: auto; }
+.agent-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.agent-tile { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--m-outline-variant); border-radius: calc(20px * var(--rs)); background: var(--m-s-low, var(--m-surface)); color: var(--m-on-surface); font: inherit; text-align: left; cursor: pointer; transition: background .15s, border-color .15s; position: relative; }
+.agent-tile:hover, .agent-tile:focus-visible { background: color-mix(in srgb, var(--m-primary) 8%, var(--m-s-low, var(--m-surface))); border-color: var(--m-primary); }
+.agent-tile .two { min-width: 0; }
+.agent-tile .dot { position: absolute; top: 12px; right: 12px; }
+.amini { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Téléphone, deux IA installées : les deux boutons d'utilisation sur leur propre ligne (moitié chacun),
+   les jauges du serveur sur la ligne suivante, pleine largeur */
+@media (max-width: 700px) {
+  .topbar:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) { grid-template-areas: "s s a" "c c c" "h h h"; row-gap: 8px; }
+  .topbar > .ai-chips:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .ai-chips:has(#codex-chip:not([hidden])):has(#claude-chip:not([hidden])) .claude-chip { width: 100%; justify-content: flex-start; min-width: 0; }
+}

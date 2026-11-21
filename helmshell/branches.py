@@ -100,7 +100,7 @@ def list_copies(slug):
                     "base": main, "when": int(when) if when.isdigit() else 0, "subject": subject,
                     "session": st["exists"], "claude": st["claude"], "status": st.get("status", ""),
                     "tmux": st["name"], "codex_session": cx["exists"], "codex": cx["alive"],
-                    "codex_tmux": cx["name"]})
+                    "codex_tmux": cx["name"], "codex_status": cx.get("status", "")})
     return out
 
 

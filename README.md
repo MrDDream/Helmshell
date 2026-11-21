@@ -120,7 +120,9 @@ Do this **before** installing Helmshell:
      See the [Claude Code documentation](https://docs.claude.com/claude-code).
    - **OpenAI Codex CLI** (Node.js 18 or newer for the npm install): `npm install -g @openai/codex`
      (or `curl -fsSL https://chatgpt.com/codex/install.sh | sh`), then `codex login`
-     (`codex login --device-auth` over SSH).
+     (`codex login --device-auth` over SSH). On Ubuntu 24.04 and later, also install the system
+     `bubblewrap` package (`sudo apt install bubblewrap`): without it, Codex's sandbox cannot start and its
+     Read only and Automatic modes refuse every command (Settings › Agents checks this for you).
 4. A **local network or a VPN** (Tailscale, NetBird, WireGuard) between your devices and the server, and a
    **fixed IP** for the server (DHCP reservation in your router, or the VPN address).
 
@@ -325,6 +327,12 @@ Claude Code and OpenAI Codex can be installed side by side: choose the agent per
 Helmshell detects the installed agents (`claude` and `codex` in the PATH or `~/.local/bin`; override with
 `CLAUDE_BIN` / `CODEX_BIN`). Each agent must be logged in once for your user, in a terminal: `claude` then
 `/login`, or `codex login` (`codex login --device-auth` over SSH or from a Helmshell terminal).
+
+Both agents are independent and get the same features: when only one is installed, the project button reads
+**Open Claude** or **Open Codex**; with both, **Open AI** asks which one to open. Each has its own usage
+button in the top bar (plan limits with their reset time, pace, context of open sessions, refreshed on the
+interval set in Settings › Agents without using any tokens), its live state in the terminal (working,
+waiting for your approval) with notifications, and its conversations on the AI sessions page.
 
 - **Agent tab of a project**: a terminal attached to the tmux session named after the folder, created when
   needed with the agent running inside ("Resume the last conversation" optional). When the agent exits, you

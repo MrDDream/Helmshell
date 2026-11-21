@@ -1,4 +1,5 @@
-"""Utilisation de Claude (forfait et contexte), relevée par la ligne d'état des sessions lancées par Helmshell."""
+"""Utilisation de Claude (forfait et contexte, ligne d'état et /usage) et de Codex (account/rateLimits/read
+et fichiers de session)."""
 import json
 import re
 import time
@@ -59,10 +60,11 @@ REFRESH = 180  # quand l'Accueil est ouvert : au plus une lecture de /usage tout
 USAGE_EVERY = (0, 2, 5, 10, 15, 30, 60)  # choix proposés dans les Paramètres (minutes)
 
 
-def every():
-    """Minutes entre deux lectures en tâche de fond (0 = seulement quand l'Accueil est ouvert)."""
+def every(key="usage_every"):
+    """Minutes entre deux lectures en tâche de fond (0 = seulement quand l'Accueil est ouvert).
+    `key` : usage_every (Claude) ou codex_usage_every (Codex)."""
     try:
-        v = int(config.get("usage_every"))
+        v = int(config.get(key))
     except (TypeError, ValueError):
         return 5
     return v if v in USAGE_EVERY else 5
@@ -151,6 +153,12 @@ def start_loop():
                     refresh(max_age=n * 60 - 15)
             except Exception:  # noqa: BLE001 - la boucle ne doit jamais s'arrêter
                 pass
+            try:
+                n = every("codex_usage_every")
+                if n:
+                    refresh_codex(max_age=n * 60 - 15)
+            except Exception:  # noqa: BLE001
+                pass
             time.sleep(30)
     threading.Thread(target=loop, daemon=True, name="usage").start()
 
@@ -229,4 +237,63 @@ def summary():
                 f.unlink(missing_ok=True)
         except OSError:
             pass
+    return out
+
+
+_cx = {"t": 0, "running": False, "error": None}
+
+
+def _refresh_codex():
+    from . import codex
+    try:
+        rl = codex.read_live_limits()
+        f = _dir() / "codex_limits.json"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"t": time.time(), "rate_limits": rl}))
+        tmp.replace(f)
+        _cx["error"] = None
+    except Exception as e:  # noqa: BLE001 - fil d'arrière-plan : la cause est montrée dans la fenêtre
+        _cx["error"] = str(e)[:300] or repr(e)[:300]
+    finally:
+        _cx["running"] = False
+
+
+def refresh_codex(force=False, max_age=REFRESH):
+    """Relit les limites de Codex en arrière-plan si elles ont plus de `max_age` s (Codex installé seulement)."""
+    import threading
+    from . import agents
+    if not agents.AGENTS["codex"].available():
+        return
+    live = _read(_dir() / "codex_limits.json") or {}
+    if _cx["running"] or (not force and time.time() - max(live.get("t", 0), _cx["t"]) < max_age):
+        return
+    _cx.update(running=True, t=time.time())
+    threading.Thread(target=_refresh_codex, daemon=True).start()
+
+
+def codex_summary():
+    """Utilisation de Codex, même forme que summary() : limites du forfait (jointes par Codex à chaque échange,
+    relues dans ses fichiers de session) et contexte des sessions Codex ouvertes dans les terminaux."""
+    from . import claude, codex
+    refresh_codex()
+    # La plus récente des deux sources : lecture directe (account/rateLimits/read) ou dernier échange
+    lim = codex.rate_limits() or {}
+    live = _read(_dir() / "codex_limits.json") or {}
+    if isinstance(live.get("rate_limits"), dict) and live.get("t", 0) >= lim.get("updated", 0):
+        lim = codex._limits_out(live["rate_limits"], live["t"])
+    out = {"limits": lim.get("limits", []), "plan": lim.get("plan", ""), "updated": lim.get("updated", 0),
+           "refreshing": _cx["running"], "every": every("codex_usage_every"), "sessions": []}
+    if _cx.get("error"):
+        out["error"] = _cx["error"]
+    for r in claude.list_repo_sessions(agent="codex"):
+        if not r.get("alive"):
+            continue
+        try:
+            st = claude.repo_state(r["slug"], r.get("branch"), "codex")
+        except Exception:  # noqa: BLE001 — session fermée entre-temps
+            continue
+        ctx = st.get("context") or {}
+        out["sessions"].append({"project": r["name"], "slug": r["slug"], "branch": r.get("branch"),
+                                "used": ctx.get("used"), "tokens": ctx.get("tokens"), "size": ctx.get("size")})
     return out

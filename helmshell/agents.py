@@ -140,10 +140,17 @@ def default_agent():
     return "claude"
 
 
-def public_info():
-    return {
+def public_info(recheck=False):
+    out = {
         "default_agent": default_agent(),
         "setting": config.get("default_agent") or "",
         "agents": [{"id": a.id, "label": a.label, "available": a.available(), "bin": a.bin(),
                     "modes": a.modes(), "default_mode": a.default_mode()} for a in AGENTS.values()],
     }
+    for a in out["agents"]:
+        if a["id"] == "codex" and a["available"]:
+            # Bac à sable de Codex utilisable sur l'hôte ? (sinon les modes Lecture seule et Automatique
+            # refusent toutes les commandes)
+            from . import codex
+            a["sandbox"] = codex.sandbox_check(force=recheck)
+    return out

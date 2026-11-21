@@ -97,7 +97,7 @@
       coolify_server_uuid: '', coolify_environment: 'production', domain_suffix: 'example.com', default_mode: 'acceptEdits',
       claude_bin: `${D.home}/.local/bin/claude`, dokploy_url: '', dokploy_public_url: '', dokploy_project_id: '', dokploy_environment_id: '',
       dokploy_server_id: '', ntfy_url: 'https://ntfy.example.com/helmshell-7f3k9q2m', public_url: 'https://helmshell.example.com',
-      notify_service: 'ntfy', gotify_url: '', default_agent: '', codex_bin: '/usr/local/bin/codex', codex_default_mode: 'auto', language: LANG,
+      notify_service: 'ntfy', gotify_url: '', default_agent: '', codex_bin: '/usr/local/bin/codex', codex_default_mode: 'auto', codex_usage_every: 5, language: LANG,
       deploy_provider: 'coolify', notify_done: true, usage_every: 5, update_check: true,
       access: { lan: true, vpn: true, vpn_cidrs: [], domain: true, domains: ['helmshell.example.com'], trusted_proxies: ['10.0.1.0/24'], ips: [] },
       oidc_issuer: '', oidc_client_id: '', oidc_allowed_emails: '', oidc_group: '', oidc_label: '', oidc_enabled: false, oidc_tested: false,
@@ -548,6 +548,21 @@
     ], updated: t - 160, sessions, refreshing: false, every: S.settings.usage_every };
   }
 
+  // Codex : forfait et contexte des sessions Codex ouvertes, comme /api/codex/usage
+  function codexUsage() {
+    const t = now();
+    const sessions = [];
+    for (const r of listRepoSessions(false, 'codex')) {
+      if (!r.alive) continue;
+      const p = S.projects.get(r.slug);
+      sessions.push({ project: p.name, slug: r.slug, branch: r.branch || null, used: 18, tokens: 46500, size: 258400 });
+    }
+    return { limits: [
+      { id: 'codex_primary', label: L('Session (5 h)', 'Session (5 h)'), used: 27, resets_at: t + 3 * 3600 + 20 * 60, window: 5 * 3600 },
+      { id: 'codex_secondary', label: L('Semaine', 'Week'), used: 31, resets_at: t + 4 * 86400, window: 7 * 86400 },
+    ], plan: 'plus', updated: t - 300, sessions, refreshing: false };
+  }
+
   /* ------------------------------------------------------------- transcripts */
   function transcriptOf(p, h, agent) {
     const t0 = h.mtime - 20 * 60;
@@ -949,10 +964,17 @@
     return transcriptOf(p, h, agent);
   });
   route('GET', '/api/claude/usage', () => usage());
+  route('GET', '/api/codex/usage', () => codexUsage());
   route('GET', '/api/claude/history', (q) => {
     const limit = Math.min(Number(q.get('limit') || 20), 60);
     const out = [];
-    for (const p of S.projects.values()) for (const h of p.history.claude) if (h.prompts) out.push({ ...h, slug: p.slug, project: p.name, icon: p.icon });
+    const only = q.get('agent');
+    for (const p of S.projects.values()) {
+      for (const agent of ['claude', 'codex']) {
+        if (only && only !== agent) continue;
+        for (const h of p.history[agent]) if (h.prompts) out.push({ ...h, agent, slug: p.slug, project: p.name, icon: p.icon });
+      }
+    }
     return out.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
   });
   route('GET', `${PP}/claude/history`, (q, b, m) => proj(m.slug).history.claude.slice(0, 8));

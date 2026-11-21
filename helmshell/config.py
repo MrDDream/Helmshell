@@ -70,6 +70,7 @@ DEFAULTS = {
     "language": None,      # "en" | "fr" ; None = pas encore choisie (fixée par ensure_initialized)
     "update_check": True,
     "notify_service": "",
+    "codex_usage_every": 5,  # idem pour les limites de Codex (account/rateLimits/read)
     "usage_every": 5,      # minutes entre deux lectures de /usage en tâche de fond (0 = seulement quand l'Accueil est ouvert)
     "notify_done": True,   # prévenir quand Claude a fini de travailler  # ntfy | gotify | discord | off ("" = ntfy si une adresse est réglée)
     "ntfy_url": "",

@@ -537,6 +537,111 @@ def main():
                     assert [m["role"] for m in tr["messages"]] == ["user", "tool", "assistant"], tr
                     assert CX.find(proj, "1111aaaa-0000-0000-0000-000000000000") is None
                     assert CX.history(tmp / "nulle-part") == []
+                    from helmshell.i18n import _ as I18N
+                    # Ancien format sans « source » : compté comme interactif
+                    assert CX.has_interactive(proj) and not CX.has_interactive(tmp / "nulle-part")
+                    # Format de Codex 0.171 (relevé sur une vraie session) : item_completed + custom_tool_call « exec »
+                    sid2 = "0199c0de-0000-7000-8000-00000000c0de"
+                    day2 = ch / "sessions" / "2026" / "11" / "21"
+                    day2.mkdir(parents=True)
+                    ts = "2026-11-21T09:11:%02d.000Z"
+                    tok = {"type": "token_count", "info": {
+                        "total_token_usage": {"total_tokens": 30000},
+                        "last_token_usage": {"input_tokens": 12800, "cached_input_tokens": 12000, "output_tokens": 120,
+                                             "total_tokens": 12920}, "model_context_window": 258400},
+                        "rate_limits": {"limit_id": "codex", "plan_type": "free", "secondary": None,
+                                        "primary": {"used_percent": 12.5, "window_minutes": 43200, "resets_at": 1797844157}}}
+                    rows = [
+                        {"timestamp": ts % 0, "type": "session_meta",
+                         "payload": {"id": sid2, "session_id": sid2, "cwd": str(proj), "source": "cli",
+                                     "originator": "codex-tui", "cli_version": "0.171.0"}},
+                        {"timestamp": ts % 1, "type": "response_item", "payload": {"type": "message", "role": "developer",
+                                                                                   "content": [{"type": "input_text", "text": "You are Codex"}]}},
+                        {"timestamp": ts % 1, "type": "response_item", "payload": {"type": "message", "role": "user",
+                                                                                   "content": [{"type": "input_text", "text": "<environment_context>…"}]}},
+                        {"timestamp": ts % 2, "type": "response_item", "payload": {"type": "message", "role": "user",
+                                                                                   "content": [{"type": "input_text", "text": "Crée hello.txt"}]}},
+                        {"timestamp": ts % 2, "type": "event_msg", "payload": {"type": "item_completed", "item": {
+                            "type": "UserMessage", "content": [{"type": "text", "text": "Crée hello.txt"}]}}},
+                        {"timestamp": ts % 3, "type": "event_msg", "payload": {"type": "item_completed", "item": {
+                            "type": "AgentMessage", "content": [{"type": "Text", "text": "Je crée le fichier."}], "phase": "commentary"}}},
+                        {"timestamp": ts % 4, "type": "response_item", "payload": {
+                            "type": "custom_tool_call", "name": "exec",
+                            "input": 'const r = await tools.exec_command({cmd:"printf \'bonjour\' > hello.txt","workdir":"/p"});\ntext(r.output);\n'}},
+                        {"timestamp": ts % 5, "type": "event_msg", "payload": tok},
+                        {"timestamp": ts % 6, "type": "event_msg", "payload": {"type": "item_completed", "item": {
+                            "type": "AgentMessage", "content": [{"type": "Text", "text": "hello.txt contient bonjour."}], "phase": "final"}}},
+                    ]
+                    (day2 / f"rollout-2026-11-21T09-11-07-{sid2}.jsonl").write_text("\n".join(json.dumps(x) for x in rows) + "\n")
+                    sid3 = "0199c0de-0000-7000-8000-0000000ta5k0"  # tâche `codex exec` dans le même dossier
+                    (day2 / f"rollout-2026-11-21T09-09-13-{sid3}.jsonl").write_text(json.dumps(
+                        {"type": "session_meta", "payload": {"id": sid3, "cwd": str(proj), "source": "exec"}}) + "\n" + json.dumps(
+                        {"timestamp": ts % 1, "type": "event_msg", "payload": {"type": "item_completed", "item": {
+                            "type": "UserMessage", "content": [{"type": "text", "text": "Tâche"}]}}}) + "\n")
+                    os.utime(day2 / f"rollout-2026-11-21T09-09-13-{sid3}.jsonl", (time.time() - 60, time.time() - 60))
+                    h = {x["id"]: x for x in CX.history(proj)}
+                    assert h[sid2]["title"] == "Crée hello.txt" and h[sid2]["prompts"] == 1 and not h[sid2]["task"], h
+                    assert h[sid3]["task"] is True, h
+                    tr = CX.transcript(proj, sid2)
+                    assert [(m["role"], m["text"][:6]) for m in tr["messages"]] == [
+                        ("user", "Crée h"), ("assistant", "Je cré"), ("tool", "Comman"), ("assistant", "hello.")], tr
+                    assert tr["messages"][2]["detail"] == "printf 'bonjour' > hello.txt", tr
+                    assert tr["title"] == "Crée hello.txt", tr
+                    ctx = CX.session_context(proj)
+                    assert ctx["size"] == 258400 and ctx["tokens"] == 12920 and 4.9 < ctx["used"] < 5.1, ctx
+                    assert CX.session_context(proj, since=time.time() + 60) is None
+                    lim = CX.rate_limits()
+                    assert lim["plan"] == "free" and lim["limits"] == [{"id": "codex_primary", "label": I18N("Mois"), "used": 12.5,
+                                                                        "resets_at": 1797844157, "window": 2592000}], lim
+                    # Écrans du TUI relevés sur Codex 0.171 (tmux capture-pane)
+                    working = ("› Crée hello.txt\n• Je crée hello.txt.\n\n• Working (3s • esc to interrupt)\n\n"
+                               "› Ask Codex to do anything\n  GPT-6-Luna default · /p\n  ← for agents · ? for shortcuts")
+                    approval = ("• Running printf 'bonjour' > hello.txt\n  Would you like to run the following command?\n"
+                                "  Environment: local\n  Reason: Autorisez-vous la création de hello.txt ?\n"
+                                "  $ printf 'bonjour' > hello.txt\n› 1. Yes, proceed (y)\n  2. Yes, and don't ask again (p)\n"
+                                "  3. No, and tell Codex what to do differently (esc)\n  Press enter to confirm or esc to cancel")
+                    trust = ("  Folder access\n  /p\n  Trust this folder? Codex can read, edit, and run files here.\n"
+                             "› 1. Trust and continue\n  2. Back to Agent Command Center\n  enter continue · esc back")
+                    idle = ("• hello.txt contient bonjour.\n  Worked for 21s • 9:11 AM\n› Ask Codex to do anything\n"
+                            "  GPT-6-Luna default · /p\n  ← for agents · ? for shortcuts")
+                    assert CX.screen_state(working) == ("busy", ""), CX.screen_state(working)
+                    assert CX.screen_state(approval) == ("waiting", "Autorisez-vous la création de hello.txt ?"), CX.screen_state(approval)
+                    assert CX.screen_state(approval.replace("  Reason: Autorisez-vous la création de hello.txt ?\n", "")) == (
+                        "waiting", "printf 'bonjour' > hello.txt")
+                    assert CX.screen_state(trust)[0] == "waiting" and CX.screen_state(trust)[1] == I18N("Faire confiance à ce dossier ?")
+                    assert CX.screen_state(idle) == ("idle", "") and CX.screen_state("") == ("idle", "")
+                    # Conversations de tous les projets : Codex à côté de Claude (page Sessions)
+                    allc = CX.history_all(tmp / "projets")
+                    assert {x["id"] for x in allc} == {sid, sid2, sid3} and all(x["slug"] == slug for x in allc), allc
+                    assert CX.history_all(tmp / "nulle-part") == []
+                    # (dans ce processus : dossier des projets du serveur de test, pas de session tmux)
+                    from helmshell import claude as CLm, projects as PJ, usage as US
+                    orig_root, orig_list = PJ.root, CLm.list_repo_sessions
+                    PJ.root = lambda: tmp / "projets"
+                    CLm.list_repo_sessions = lambda **k: []
+                    try:
+                        rc = PJ.recent_conversations(40, "codex")
+                        assert rc and all(x["agent"] == "codex" and x["project"] for x in rc), rc
+                        assert all(x["agent"] == "claude" for x in PJ.recent_conversations(40, "claude"))
+                        cu = US.codex_summary()
+                        assert cu["plan"] == "free" and cu["limits"][0]["used"] == 12.5 and cu["sessions"] == [], cu
+                    finally:
+                        PJ.root, CLm.list_repo_sessions = orig_root, orig_list
+                    both = c.call("GET", "/api/claude/history?limit=40")
+                    assert all(x.get("agent") in ("claude", "codex") for x in both), both
+                    c.call("GET", "/api/claude/history?agent=bidon", expect=400)
+                    assert isinstance(c.call("GET", "/api/codex/usage")["limits"], list)
+                    # Réponse de account/rateLimits/read (serveur d'application de Codex 0.171, camelCase)
+                    live = CX._limits_out({"limitId": "codex", "planType": "plus", "secondary": {"usedPercent": 40,
+                                           "windowDurationMins": 10080, "resetsAt": 1797000000},
+                                           "primary": {"usedPercent": 7, "windowDurationMins": 300, "resetsAt": 1796000000}}, 5)
+                    assert live == {"plan": "plus", "updated": 5, "limits": [
+                        {"id": "codex_primary", "label": I18N("Session ({n} h)", n=5), "used": 7.0, "resets_at": 1796000000, "window": 18000},
+                        {"id": "codex_secondary", "label": I18N("Semaine"), "used": 40.0, "resets_at": 1797000000, "window": 604800}]}, live
+                    c.call("PUT", "/api/settings", {"codex_usage_every": 7}, expect=400)
+                    c.call("PUT", "/api/settings", {"codex_usage_every": 15})
+                    assert c.call("GET", "/api/settings")["codex_usage_every"] == 15
+                    c.call("PUT", "/api/settings", {"codex_usage_every": 5})
                 finally:
                     if old_home is None:
                         os.environ.pop("CODEX_HOME", None)
@@ -575,18 +680,28 @@ def main():
                     finally:
                         c.call("POST", f"/api/projects/{slug}/claude/repo/kill?agent=codex", {})
                 c.call("POST", f"/api/projects/{slug}/tasks", {"prompt": "x", "agent": "bidon"}, expect=400)
-                # Fin de travail : pas de notification pour Codex (pas d'état « travaille »)
+                # Notifications de Codex : validation demandée (une fois par question), puis fin de travail
                 from helmshell import events
                 sent = []
-                events.notify.send = lambda title, *a, **k: sent.append(title)
-                now = time.time()
-                r0 = {"slug": "y", "key": "codex:y", "agent": "codex", "name": "Y", "claude": True,
-                      "started": now - 600, "status": "busy"}
-                events._prev = None
-                events._notify_transitions([], [], [r0])
-                events._busy_since["codex:y"] = now - 30
-                events._notify_transitions([], [], [dict(r0, status="idle")])
-                assert sent == [], sent
+                orig_send = events.notify.send
+                events.notify.send = lambda title, *a, **k: sent.append((title, a[0] if a else ""))
+                try:
+                    now = time.time()
+                    r0 = {"slug": "y", "key": "codex:y", "agent": "codex", "name": "Y", "claude": True,
+                          "started": now - 600, "status": "busy"}
+                    events._prev = None
+                    events._notify_transitions([], [], [r0])
+                    events._notify_transitions([], [], [dict(r0, status="waiting", question="ls ?")])
+                    events._notify_transitions([], [], [dict(r0, status="waiting", question="ls ?")])
+                    assert sent == [(I18N("{name} : Codex attend ta validation", name="Y"), "ls ?")], sent
+                    events._notify_transitions([], [], [r0])
+                    events._busy_since["codex:y"] = now - 30
+                    events._notify_transitions([], [], [dict(r0, status="idle")])
+                    assert sent[1:] == [(I18N("{name} : {agent} a terminé", name="Y", agent="Codex"),
+                                         I18N("{agent} attend la suite dans le terminal du projet.", agent="Codex"))], sent
+                finally:
+                    events.notify.send = orig_send
+                    events._prev = None
                 # Réglages
                 c.call("PUT", "/api/settings", {"default_agent": "bidon"}, expect=400)
                 c.call("PUT", "/api/settings", {"codex_default_mode": "plan"}, expect=400)

@@ -65,10 +65,11 @@ def check_trust(slug, p, trust=False):
 
 
 def start(slug, prompt, mode, kind="", trust=False, agent=None):
-    """Lance une tâche. `agent` : "claude" (défaut, comme avant) ou "codex" ; mode vide = mode par défaut de l'agent."""
+    """Lance une tâche. `agent` : "claude" ou "codex" (vide = l'agent par défaut des réglages, ou le seul installé) ;
+    mode vide = mode par défaut de l'agent."""
     from . import agents, codex, projects
     p = projects.project_dir(slug)
-    agent = agent or "claude"
+    agent = agent or agents.default_agent()
     ag = agents.get(agent)
     if agent != "claude":  # Claude absent : la tâche échoue et le dit dans son journal, comme avant
         agents.require(agent)

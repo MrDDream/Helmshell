@@ -62,24 +62,30 @@ def _notify_transitions(sessions, task_list, repos=()):
             notify.send(_("{name} : Claude s'est arrêté", name=s["name"]),
                         _("Code de sortie {code}", code=s.get("exit_code")),
                         click=link, priority=3, tags=["warning"])
-    # Claude a fini de travailler dans le terminal d'un projet (busy -> idle). Claude seulement : Codex n'a pas
-    # (encore) d'état « travaille / en attente ».
+    # L'agent a fini de travailler dans le terminal d'un projet (busy -> idle) ; Codex attend une validation.
+    # (Les questions de Claude passent par ses hooks, plus haut.)
     from . import config
     now = time.time()
     for key, r in cur["r"].items():
         before = _prev.get("r", {}).get(key, {})
         slug = key
-        if (r.get("agent") or "claude") != "claude":
-            continue
+        codex = (r.get("agent") or "claude") == "codex"
+        who = "Codex" if codex else "Claude"
+        click = (f"{base}/#/projets/{r['slug']}/claude?" + "&".join(
+            ([f"branche={r['branch']}"] if r.get("branch") else []) + (["agent=codex"] if codex else []))).rstrip("?") \
+            if base else ""
         if r.get("status") == "busy" and before.get("status") != "busy":
             _busy_since[slug] = now
         if (before.get("status") == "busy" and r.get("status") == "idle" and r.get("claude")
                 and config.get("notify_done") is not False and now - (r.get("started") or now) > 60
                 and now - _busy_since.pop(slug, now) >= 20):
-            notify.send(_("{name} : Claude a terminé", name=r["name"]),
-                        _("Claude attend la suite dans le terminal du projet."),
-                        click=f"{base}/#/projets/{r['slug']}/claude" + (f"?branche={r['branch']}" if r.get("branch") else "")
-                        if base else "", tags=["white_check_mark"])
+            notify.send(_("{name} : {agent} a terminé", name=r["name"], agent=who),
+                        _("{agent} attend la suite dans le terminal du projet.", agent=who),
+                        click=click, tags=["white_check_mark"])
+        if (codex and r.get("status") == "waiting" and r.get("claude")
+                and (before.get("status") != "waiting" or before.get("question") != r.get("question"))):
+            notify.send(_("{name} : Codex attend ta validation", name=r["name"]),
+                        r.get("question") or _("Validation demandée"), click=click, priority=4, tags=["question"])
     for tid, t in cur["t"].items():
         before = _prev["t"].get(tid)
         if before and before.get("status") == "running" and t.get("status") != "running":
